@@ -27,7 +27,9 @@ interface Contact {
   timestamp: string;
   unreadCount?: number;
   isOnline?: boolean;
+  isAI?: boolean;
 }
+
 interface Message {
   id: string;
   senderId: string;
@@ -48,6 +50,7 @@ const dummyContacts: Contact[] = [
     timestamp: "12:03",
     unreadCount: 1,
     isOnline: true,
+    isAI: true,
   },
   {
     id: "2",
@@ -56,6 +59,7 @@ const dummyContacts: Contact[] = [
     lastMessage: "Saya mau beli UFO-nya 1",
     timestamp: "22:03",
     isOnline: true,
+    isAI: false,
   },
   {
     id: "3",
@@ -64,6 +68,7 @@ const dummyContacts: Contact[] = [
     lastMessage: "I need a new pencil",
     timestamp: "Yesterday",
     isOnline: false,
+    isAI: false,
   },
   {
     id: "4",
@@ -72,6 +77,7 @@ const dummyContacts: Contact[] = [
     lastMessage: "Factory... Must... Grow... Up",
     timestamp: "Yesterday",
     isOnline: false,
+    isAI: true,
   },
 ];
 
@@ -345,9 +351,16 @@ export default function ChatPage() {
               </Avatar>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center justify-between mb-1">
-                  <h3 className="font-semibold text-gray-900 text-sm truncate">
-                    {contact.name}
-                  </h3>
+                  <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                    <h3 className="font-semibold text-gray-900 text-sm truncate">
+                      {contact.name}
+                    </h3>
+                    {contact.isAI && (
+                      <span className="px-1.5 py-0.5 bg-gradient-to-r from-purple-500 to-purple-600 text-white text-[10px] font-semibold rounded-full flex-shrink-0">
+                        AI
+                      </span>
+                    )}
+                  </div>
                   <span className="text-xs text-gray-500 flex-shrink-0 ml-2">
                     {contact.timestamp}
                   </span>
@@ -402,9 +415,16 @@ export default function ChatPage() {
                 </AvatarFallback>
               </Avatar>
               <div>
-                <h2 className="font-semibold text-gray-900">
-                  {activeContact?.name}
-                </h2>
+                <div className="flex items-center gap-2">
+                  <h2 className="font-semibold text-gray-900">
+                    {activeContact?.name}
+                  </h2>
+                  {activeContact?.isAI && (
+                    <span className="px-2 py-0.5 bg-gradient-to-r from-purple-500 to-purple-600 text-white text-xs font-semibold rounded-full">
+                      AI
+                    </span>
+                  )}
+                </div>
                 <p
                   className={`text-xs ${activeContact?.isOnline ? "text-green-600" : "text-gray-400"}`}
                 >
