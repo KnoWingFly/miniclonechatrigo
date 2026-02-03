@@ -1,5 +1,7 @@
 "use client";
 
+import Image from "next/image";
+import Link from "next/link";
 import { useState } from "react";
 import {
   Send,
@@ -11,6 +13,9 @@ import {
   Phone,
   Video,
   Smile,
+  Bell,
+  User,
+  Filter,
 } from "lucide-react";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -218,11 +223,39 @@ export default function ChatPage() {
   };
 
   return (
-    <div className="flex h-screen bg-gray-50">
+    <div className="flex h-screen bg-gray-50 pt-[57px]">
+      {/* Top Navigation Bar */}
+      <div className="fixed top-0 left-0 right-0 z-50 bg-white border-b border-gray-200 shadow-sm">
+        <div className="flex items-center justify-between px-4 py-3">
+          <div className="flex items-center gap-3">
+            <Image
+              src="/Logo/orange_logo_with_blue_text.png"
+              alt="Chatrigo Logo"
+              width={120}
+              height={40}
+              className="object-contain"
+            />
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button className="p-2 hover:bg-gray-100 rounded-lg transition-colors relative">
+              <Bell size={20} className="text-gray-700" />
+              <span className="absolute top-1 right-1 w-2 h-2 bg-orange-500 rounded-full"></span>
+            </button>
+            <Link
+              href="/"
+              className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+            >
+              <User size={20} className="text-gray-700" />
+            </Link>
+          </div>
+        </div>
+      </div>
+
       {/* Sidebar */}
       <div
         className={`
-        fixed lg:static inset-y-0 left-0 z-40
+        fixed lg:static inset-y-0 left-0 z-40 lg:pt-0
         w-80 bg-white border-r border-gray-200
         transform transition-transform duration-300 ease-in-out
         ${isSidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}
@@ -235,7 +268,7 @@ export default function ChatPage() {
               <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center">
                 <span className="text-orange-600 font-bold text-xl">C</span>
               </div>
-              <span className="text-white font-semibold text-lg">Chatrigo</span>
+              <span className="text-white font-semibold text-lg">Chat</span>
             </div>
             <button className="lg:hidden text-white p-2 hover:bg-orange-600 rounded-lg transition-colors">
               <MoreVertical size={20} />
@@ -255,8 +288,40 @@ export default function ChatPage() {
           </div>
         </div>
 
+        {/* Filter Dropdown */}
+        <div className="px-4 py-3">
+          <div className="relative">
+            <Filter
+              className="absolute left-3 top-1/2 transform -translate-y-1/2 text-orange-500"
+              size={16}
+            />
+            <select className="w-full pl-9 pr-4 py-2.5 bg-gradient-to-r from-orange-50 to-orange-100 border-2 border-orange-200 rounded-xl text-sm font-medium text-gray-700 focus:outline-none focus:ring-2 focus:ring-orange-400 focus:border-transparent appearance-none cursor-pointer hover:border-orange-300 transition-all">
+              <option value="all">All Chats</option>
+              <option value="unread">Unread</option>
+              <option value="ai">AI Only</option>
+              <option value="human">Human Only</option>
+              <option value="archived">Archived</option>
+            </select>
+            <div className="absolute right-3 top-1/2 transform -translate-y-1/2 pointer-events-none">
+              <svg
+                className="w-4 h-4 text-orange-500"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M19 9l-7 7-7-7"
+                />
+              </svg>
+            </div>
+          </div>
+        </div>
+
         {/*Contact List */}
-        <div className="overflow-y-auto h-[calc(100vh-140px)]">
+        <div className="overflow-y-auto h-[calc(100vh-305px)]">
           {dummyContacts.map((contact) => (
             <button
               key={contact.id}
@@ -302,9 +367,6 @@ export default function ChatPage() {
               </div>
             </button>
           ))}
-        </div>
-        <div className="overflow-y-auto h-[calc(100vh-140px)]">
-          <p className="p-4">Contact list will go here</p>
         </div>
       </div>
 
