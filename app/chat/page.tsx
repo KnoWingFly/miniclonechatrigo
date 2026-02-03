@@ -23,6 +23,7 @@ interface Contact {
   lastMessage: string;
   timestamp: string;
   unreadCount?: number;
+  isOnline?: boolean;
 }
 interface Message {
   id: string;
@@ -43,6 +44,7 @@ const dummyContacts: Contact[] = [
     lastMessage: "Harga paket Starlingling berapa yah ?",
     timestamp: "12:03",
     unreadCount: 1,
+    isOnline: true,
   },
   {
     id: "2",
@@ -50,6 +52,7 @@ const dummyContacts: Contact[] = [
     avatar: "",
     lastMessage: "Saya mau beli UFO-nya 1",
     timestamp: "22:03",
+    isOnline: true,
   },
   {
     id: "3",
@@ -57,6 +60,7 @@ const dummyContacts: Contact[] = [
     avatar: "",
     lastMessage: "I need a new pencil",
     timestamp: "Yesterday",
+    isOnline: false,
   },
   {
     id: "4",
@@ -64,81 +68,155 @@ const dummyContacts: Contact[] = [
     avatar: "",
     lastMessage: "Factory... Must... Grow... Up",
     timestamp: "Yesterday",
+    isOnline: false,
   },
 ];
 
-const dummyMessages: Message[] = [
-  {
-    id: "1",
-    senderId: "1",
-    senderName: "John Doe",
-    content: "Pagi, saya mau bertanya",
-    timestamp: "10:45",
-    isRead: true,
-    isDelivered: true,
-  },
-  {
-    id: "1",
-    senderId: "me",
-    senderName: "You",
-    content: "Siang, ada yang bisa saya bantu",
-    timestamp: "12:00",
-    isRead: true,
-    isDelivered: true,
-  },
-  {
-    id: "1",
-    senderId: "1",
-    senderName: "John Doe",
-    content: "Harga paket Starlingling berapa yah ?",
-    timestamp: "12:03",
-    isRead: false,
-    isDelivered: true,
-  },
-  {
-    id: "2",
-    senderId: "2",
-    senderName: "Meteor",
-    content: "Saya mau beli ufonya 1",
-    timestamp: "22:03",
-    isRead: true,
-    isDelivered: true,
-  },
-  {
-    id: "3",
-    senderId: "3",
-    senderName: "John Wick",
-    content: "I need a new pencil",
-    timestamp: "Yesterday",
-    isRead: true,
-    isDelivered: true,
-  },
-  {
-    id: "3",
-    senderId: "me",
-    senderName: "You",
-    content: "Which one ?",
-    timestamp: "03.10",
-    isRead: false,
-    isDelivered: false,
-  },
-  {
-    id: "4",
-    senderId: "4",
-    senderName: "Endministrator",
-    content: "Factory... Must... Grow... Up",
-    timestamp: "Yesterday",
-    isRead: true,
-    isDelivered: true,
-  },
-];
+const messagesByContact: Record<string, Message[]> = {
+  "1": [
+    {
+      id: "msg-1-1",
+      senderId: "1",
+      senderName: "John Doe",
+      content: "Pagi, saya mau bertanya",
+      timestamp: "10:45",
+      isRead: true,
+      isDelivered: true,
+    },
+    {
+      id: "msg-1-2",
+      senderId: "me",
+      senderName: "You",
+      content: "Siang, ada yang bisa saya bantu",
+      timestamp: "12:00",
+      isRead: true,
+      isDelivered: true,
+    },
+    {
+      id: "msg-1-3",
+      senderId: "1",
+      senderName: "John Doe",
+      content: "Harga paket Starlingling berapa yah ?",
+      timestamp: "12:03",
+      isRead: false,
+      isDelivered: true,
+    },
+  ],
+  "2": [
+    {
+      id: "msg-2-1",
+      senderId: "2",
+      senderName: "Meteor",
+      content: "Halo, saya tertarik dengan produk UFO",
+      timestamp: "21:30",
+      isRead: true,
+      isDelivered: true,
+    },
+    {
+      id: "msg-2-2",
+      senderId: "me",
+      senderName: "You",
+      content: "Baik, ada yang bisa saya jelaskan?",
+      timestamp: "21:45",
+      isRead: true,
+      isDelivered: true,
+    },
+    {
+      id: "msg-2-3",
+      senderId: "2",
+      senderName: "Meteor",
+      content: "Saya mau beli UFO-nya 1",
+      timestamp: "22:03",
+      isRead: true,
+      isDelivered: true,
+    },
+  ],
+  "3": [
+    {
+      id: "msg-3-1",
+      senderId: "3",
+      senderName: "John Wick",
+      content: "I need a new pencil",
+      timestamp: "Yesterday",
+      isRead: true,
+      isDelivered: true,
+    },
+    {
+      id: "msg-3-2",
+      senderId: "me",
+      senderName: "You",
+      content: "Which one ?",
+      timestamp: "03:10",
+      isRead: false,
+      isDelivered: false,
+    },
+  ],
+  "4": [
+    {
+      id: "msg-4-1",
+      senderId: "4",
+      senderName: "Endministrator",
+      content: "Factory... Must... Grow... Up",
+      timestamp: "Yesterday",
+      isRead: true,
+      isDelivered: true,
+    },
+    {
+      id: "msg-4-2",
+      senderId: "me",
+      senderName: "You",
+      content: "Get Some Help",
+      timestamp: "10:15",
+      isRead: true,
+      isDelivered: true,
+    },
+  ],
+};
 
 export default function ChatPage() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [activeContactId, setActiveContactId] = useState("1");
-  const [messages, setMessages] = useState<Message[]>(dummyMessages);
+  const [messagesByContactState, setMessagesByContactState] =
+    useState<Record<string, Message[]>>(messagesByContact);
   const [inputMessage, setInputMessage] = useState("");
   const activeContact = dummyContacts.find((c) => c.id === activeContactId);
+  const currentMessages = messagesByContactState[activeContactId] || [];
+
+  // Helper function to get last message for a contact
+  const getLastMessage = (contactId: string): string => {
+    const messages = messagesByContactState[contactId] || [];
+    if (messages.length === 0) return "No messages yet";
+    return messages[messages.length - 1].content;
+  };
+
+  // Send message function
+  const handleSendMessage = () => {
+    if (!inputMessage.trim()) return;
+
+    const newMessage: Message = {
+      id: `msg-${activeContactId}-${Date.now()}`,
+      senderId: "me",
+      senderName: "You",
+      content: inputMessage,
+      timestamp: new Date().toLocaleTimeString("id-ID", {
+        hour: "2-digit",
+        minute: "2-digit",
+      }),
+      isRead: false,
+      isDelivered: true,
+    };
+
+    setMessagesByContactState({
+      ...messagesByContactState,
+      [activeContactId]: [
+        ...(messagesByContactState[activeContactId] || []),
+        newMessage,
+      ],
+    });
+
+    setInputMessage("");
+  };
+
   return (
     <div className="flex h-screen bg-gray-50">
       {/* Sidebar */}
@@ -176,6 +254,7 @@ export default function ChatPage() {
             />
           </div>
         </div>
+
         {/*Contact List */}
         <div className="overflow-y-auto h-[calc(100vh-140px)]">
           {dummyContacts.map((contact) => (
@@ -212,7 +291,7 @@ export default function ChatPage() {
                 </div>
                 <div className="flex items-center justify-between">
                   <p className="text-sm text-gray-600 truncate flex-1">
-                    {contact.lastMessage}
+                    {getLastMessage(contact.id)}
                   </p>
                   {contact.unreadCount && (
                     <span className="ml-2 bg-orange-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center flex-shrink-0">
@@ -228,9 +307,173 @@ export default function ChatPage() {
           <p className="p-4">Contact list will go here</p>
         </div>
       </div>
-      {/* TO-DO: Main Chat Area */}
+
+      {/* Overlay Mobile */}
+      {isSidebarOpen && (
+        <div
+          className="fixed inset-0 bg-black bg-opacity-50 z-30 lg:hidden"
+          onClick={() => setIsSidebarOpen(false)}
+        />
+      )}
+
+      {/* Main Chat Area */}
       <div className="flex-1 flex flex-col bg-white">
-        <p>Area Chat</p>
+        {/* Chat Header */}
+        <div className="p-4 border-b border-gray-200 bg-white shadow-sm">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+                className="lg:hidden p-2 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                <Menu size={24} className="text-gray-700" />
+              </button>
+              <Avatar className="w-10 h-10">
+                <AvatarImage
+                  src={activeContact?.avatar}
+                  alt={activeContact?.name}
+                />
+                <AvatarFallback className="bg-gradient-to-br from-orange-400 to-orange-600 text-white font-semibold">
+                  {activeContact?.name
+                    .split(" ")
+                    .map((n) => n[0])
+                    .join("")
+                    .slice(0, 2)}
+                </AvatarFallback>
+              </Avatar>
+              <div>
+                <h2 className="font-semibold text-gray-900">
+                  {activeContact?.name}
+                </h2>
+                <p
+                  className={`text-xs ${activeContact?.isOnline ? "text-green-600" : "text-gray-400"}`}
+                >
+                  {activeContact?.isOnline ? "Online" : "Offline"}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <button className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
+                <Phone size={20} className="text-gray-600" />
+              </button>
+              <button className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
+                <Video size={20} className="text-gray-600" />
+              </button>
+              <button className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
+                <MoreVertical size={20} className="text-gray-600" />
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Messages Area */}
+        <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50">
+          {currentMessages.map((message) => {
+            const isMe = message.senderId === "me";
+            return (
+              <div
+                key={message.id}
+                className={`flex ${isMe ? "justify-end" : "justify-start"}`}
+              >
+                <div
+                  className={`flex gap-2 max-w-[75%] ${isMe ? "flex-row-reverse" : "flex-row"}`}
+                >
+                  {!isMe && (
+                    <Avatar className="w-8 h-8 flex-shrink-0">
+                      <AvatarFallback className="bg-gradient-to-br from-orange-400 to-orange-600 text-white text-xs">
+                        {message.senderName
+                          .split(" ")
+                          .map((n) => n[0])
+                          .join("")
+                          .slice(0, 2)}
+                      </AvatarFallback>
+                    </Avatar>
+                  )}
+                  <div>
+                    {!isMe && (
+                      <p className="text-xs text-gray-600 mb-1 ml-1">
+                        {message.senderName}
+                      </p>
+                    )}
+                    <div
+                      className={`
+                rounded-2xl px-4 py-3 shadow-sm
+                ${
+                  isMe
+                    ? "bg-gradient-to-br from-orange-500 to-orange-600 text-white rounded-tr-sm"
+                    : "bg-white text-gray-800 border border-gray-200 rounded-tl-sm"
+                }
+              `}
+                    >
+                      <p className="text-sm leading-relaxed">
+                        {message.content}
+                      </p>
+                    </div>
+                    <div
+                      className={`flex items-center gap-1 mt-1 ${isMe ? "justify-end" : "justify-start"}`}
+                    >
+                      <span className="text-xs text-gray-500">
+                        {message.timestamp}
+                      </span>
+                      {isMe && (
+                        <span className="text-gray-500">
+                          {message.isRead ? (
+                            <CheckCheck size={14} className="text-blue-500" />
+                          ) : message.isDelivered ? (
+                            <CheckCheck size={14} />
+                          ) : (
+                            <Check size={14} />
+                          )}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Input Area */}
+        <div className="p-4 bg-white border-t border-gray-200">
+          <div className="flex items-end gap-2">
+            <button className="p-2.5 hover:bg-gray-100 rounded-lg transition-colors flex-shrink-0">
+              <Smile size={24} className="text-gray-600" />
+            </button>
+
+            <div className="flex-1 relative">
+              <textarea
+                value={inputMessage}
+                onChange={(e) => setInputMessage(e.target.value)}
+                onKeyPress={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSendMessage();
+                  }
+                }}
+                placeholder="Enter Messages"
+                rows={1}
+                className="w-full px-4 py-3 bg-gray-100 border border-gray-200 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent resize-none"
+                style={{ minHeight: "48px", maxHeight: "120px" }}
+              />
+            </div>
+
+            <button
+              onClick={handleSendMessage}
+              disabled={!inputMessage.trim()}
+              className={`
+                p-3 rounded-xl transition-all flex-shrink-0
+                ${
+                  inputMessage.trim()
+                    ? "bg-gradient-to-br from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white shadow-lg hover:shadow-xl"
+                    : "bg-gray-200 text-gray-400 cursor-not-allowed"
+                }
+              `}
+            >
+              <Send size={20} />
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );
