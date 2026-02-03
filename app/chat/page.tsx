@@ -10,8 +10,6 @@ import {
   Check,
   CheckCheck,
   MoreVertical,
-  Phone,
-  Video,
   Smile,
   Bell,
   User,
@@ -415,12 +413,6 @@ export default function ChatPage() {
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <button className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
-                <Phone size={20} className="text-gray-600" />
-              </button>
-              <button className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
-                <Video size={20} className="text-gray-600" />
-              </button>
               <button className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
                 <MoreVertical size={20} className="text-gray-600" />
               </button>
