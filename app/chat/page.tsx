@@ -229,11 +229,11 @@ export default function ChatPage() {
   return (
     <div className="flex h-screen bg-gray-50 pt-[57px]">
       {/* Top Navigation Bar */}
-      <div className="fixed top-0 left-0 right-0 z-50 bg-white border-b border-gray-200 shadow-sm">
+      <div className="fixed top-0 left-0 right-0 z-50 bg-orange-500">
         <div className="flex items-center justify-between px-4 py-3">
           <div className="flex items-center gap-3">
             <Image
-              src="/Logo/orange_logo_with_blue_text.png"
+              src="/Logo/white_logo_with_white_text.png"
               alt="Chatrigo Logo"
               width={120}
               height={40}
@@ -242,15 +242,15 @@ export default function ChatPage() {
           </div>
 
           <div className="flex items-center gap-2">
-            <button className="p-2 hover:bg-gray-100 rounded-lg transition-colors relative">
-              <Bell size={20} className="text-gray-700" />
-              <span className="absolute top-1 right-1 w-2 h-2 bg-orange-500 rounded-full"></span>
+            <button className="p-2 hover:bg-orange-600 rounded-lg transition-colors relative">
+              <Bell size={20} className="text-white" />
+              <span className="absolute top-1 right-1 w-2 h-2 bg-white rounded-full shadow-md"></span>
             </button>
             <Link
               href="/"
-              className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+              className="p-2 hover:bg-orange-600 rounded-lg transition-colors"
             >
-              <User size={20} className="text-gray-700" />
+              <User size={20} className="text-white" />
             </Link>
           </div>
         </div>
@@ -266,8 +266,8 @@ export default function ChatPage() {
       `}
       >
         {/* Sidebar Header */}
-        <div className="p-4 border-b border-gray-200 bg-gradient-to-r from-orange-500 to-orange-600">
-          <div className="flex items-center justify-between mb-4">
+        <div className="bg-orange-500">
+          <div className="flex items-center justify-between mb-4 px-4 pt-4">
             <div className="flex items-center gap-2">
               <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center">
                 <span className="text-orange-600 font-bold text-xl">C</span>
@@ -279,7 +279,7 @@ export default function ChatPage() {
             </button>
           </div>
           {/* Search Bar */}
-          <div className="relative">
+          <div className="relative px-4 pb-4">
             <Search
               className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"
               size={18}
@@ -356,7 +356,7 @@ export default function ChatPage() {
                       {contact.name}
                     </h3>
                     {contact.isAI && (
-                      <span className="px-1.5 py-0.5 bg-gradient-to-r from-purple-500 to-purple-600 text-white text-[10px] font-semibold rounded-full flex-shrink-0">
+                      <span className="px-1.5 py-0.5 bg-gradient-to-r from-orange-400 to-orange-500 text-white text-[10px] font-semibold rounded-full flex-shrink-0">
                         AI
                       </span>
                     )}
@@ -420,7 +420,7 @@ export default function ChatPage() {
                     {activeContact?.name}
                   </h2>
                   {activeContact?.isAI && (
-                    <span className="px-2 py-0.5 bg-gradient-to-r from-purple-500 to-purple-600 text-white text-xs font-semibold rounded-full">
+                    <span className="px-2 py-0.5 bg-gradient-to-r from-orange-400 to-orange-500 text-white text-xs font-semibold rounded-full">
                       AI
                     </span>
                   )}
@@ -510,7 +510,7 @@ export default function ChatPage() {
 
         {/* Input Area */}
         <div className="p-4 bg-white border-t border-gray-200">
-          <div className="flex items-end gap-2">
+          <div className="flex items-center gap-2">
             <button className="p-2.5 hover:bg-gray-100 rounded-lg transition-colors flex-shrink-0">
               <Smile size={24} className="text-gray-600" />
             </button>
@@ -528,7 +528,7 @@ export default function ChatPage() {
                 placeholder="Enter Messages"
                 rows={1}
                 className="w-full px-4 py-3 bg-gray-100 border border-gray-200 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent resize-none"
-                style={{ minHeight: "48px", maxHeight: "120px" }}
+                style={{ height: "48px", maxHeight: "120px" }}
               />
             </div>
 
