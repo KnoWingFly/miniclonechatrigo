@@ -2,11 +2,11 @@ generator client {
   provider = "prisma-client"
   output   = "../app/generated/prisma"
 }
+
 datasource db {
   provider = "postgresql"
 }
 
-// Dummy Data
 model User {
   id        String   @id @default(cuid())
   email     String   @unique
