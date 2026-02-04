@@ -17,7 +17,8 @@ export default function HomePage() {
         // Redirect user to sign-in if not logged in
         router.push("/auth/signin");
       } else {
-        router.push("/chat");
+        setUser(user);
+        setLoading(false);
       }
     });
   }, [supabase.auth, router]);
