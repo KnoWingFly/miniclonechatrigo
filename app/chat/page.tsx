@@ -162,7 +162,7 @@ export default function ChatPage() {
   useEffect(() => {
     if (activeContactId) {
       fetchMessages(activeContactId);
-      markAsRead(activeContactId); 
+      markAsRead(activeContactId);
     }
   }, [activeContactId]);
 
@@ -261,9 +261,7 @@ export default function ChatPage() {
           ? {
               ...session,
               updatedAt: new Date(),
-              messages: [
-                { ...tempMessage, isRead: true },
-              ],
+              messages: [{ ...tempMessage, isRead: true }],
             }
           : session,
       ),
@@ -597,7 +595,14 @@ export default function ChatPage() {
 
       {/* Main Chat Area */}
       {!activeContactId ? (
-        <div className="flex-1 flex items-center justify-center bg-gray-50/50">
+        <div className="flex-1 flex items-center justify-center bg-gray-50/50 relative">
+          <button
+            onClick={() => setIsSidebarOpen(true)}
+            className="lg:hidden absolute top-4 left-4 p-2 hover:bg-gray-100 rounded-lg transition-colors text-gray-600"
+          >
+            <Menu size={24} />
+          </button>
+
           <div className="text-center max-w-sm px-6">
             <div className="w-20 h-20 mx-auto mb-6 bg-white rounded-2xl shadow-sm border border-gray-100 flex items-center justify-center text-orange-500">
               <Bot size={40} />
