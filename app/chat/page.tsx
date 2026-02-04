@@ -2,6 +2,8 @@
 
 import Image from "next/image";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { createClient } from "@/lib/supabase/client";
 import { useEffect, useState, useRef } from "react";
 import {
   Send,
@@ -28,6 +30,14 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 export default function ChatPage() {
+  const supabase = createClient();
+  const router = useRouter();
+
+  // Auth State
+  const [user, setUser] = useState<any>(null);
+  const [isAuthChecking, setIsAuthChecking] = useState(true);
+
+  // Chat State
   const [chatSessions, setChatSessions] = useState<any[]>([]);
   const [currentMessages, setCurrentMessages] = useState<any[]>([]);
   const [loadingMessages, setLoadingMessages] = useState(false);
@@ -57,6 +67,29 @@ export default function ChatPage() {
       description: "Chatrigo assistant bot",
     },
   ];
+
+  // Auth check
+  useEffect(() => {
+    const checkUser = async () => {
+      try {
+        const {
+          data: { user },
+          error,
+        } = await supabase.auth.getUser();
+        if (error || !user) {
+          router.push("/auth/signin");
+        } else {
+          setUser(user);
+          fetchChatSessions();
+          setIsAuthChecking(false);
+        }
+      } catch (error) {
+        console.error("Auth check failed", error);
+        router.push("/auth/signin");
+      }
+    };
+    checkUser();
+  }, [supabase, router]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -165,10 +198,6 @@ export default function ChatPage() {
       markAsRead(activeContactId);
     }
   }, [activeContactId]);
-
-  useEffect(() => {
-    fetchChatSessions();
-  }, []);
 
   const fetchChatSessions = async () => {
     try {
@@ -308,6 +337,13 @@ export default function ChatPage() {
     }
   };
 
+  if (isAuthChecking) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-white">
+        <Loader2 className="w-10 h-10 text-orange-500 animate-spin" />
+      </div>
+    );
+  }
   return (
     <div className="flex h-screen bg-white pt-[60px] overflow-hidden">
       {/* Notification Toast */}
@@ -331,7 +367,7 @@ export default function ChatPage() {
         </div>
       )}
 
-      {/* Top Navigation Bar*/}
+      {/* Top Navigation Bar */}
       <div className="fixed top-0 left-0 right-0 z-50 bg-orange-500 shadow-md h-[60px]">
         <div className="flex items-center justify-between px-4 h-full">
           <div className="flex items-center gap-3">
@@ -596,6 +632,7 @@ export default function ChatPage() {
       {/* Main Chat Area */}
       {!activeContactId ? (
         <div className="flex-1 flex items-center justify-center bg-gray-50/50 relative">
+          {/* Mobile sidebar toggle */}
           <button
             onClick={() => setIsSidebarOpen(true)}
             className="lg:hidden absolute top-4 left-4 p-2 hover:bg-gray-100 rounded-lg transition-colors text-gray-600"
