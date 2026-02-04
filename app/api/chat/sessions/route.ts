@@ -10,10 +10,12 @@ export async function GET(request: NextRequest) {
     if (error || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
+    
     // Find/create user 
     let dbUser = await prisma.user.findUnique({
       where: { supabaseId: user.id },
     })
+    
     if (!dbUser) {
       dbUser = await prisma.user.create({
         data: {
@@ -23,23 +25,37 @@ export async function GET(request: NextRequest) {
         },
       })
     }
-    // Fetch all chat sessions (Last message only)
+    
+    // Fetch all chat sessions (Last message + Unread Count)
     const sessions = await prisma.chatSession.findMany({
       where: { userId: dbUser.id },
       include: {
         messages: {
           orderBy: { createdAt: 'desc' },
-          take: 1,
+          take: 1, // fetch the last message for preview
         },
+        // Count unread messages
+        _count: {
+          select: {
+            messages: {
+              where: {
+                isRead: false,
+                senderId: { not: 'user' } 
+              }
+            }
+          }
+        }
       },
       orderBy: { updatedAt: 'desc' },
     })
+    
     return NextResponse.json({ sessions })
   } catch (error) {
     console.error('Error fetching chat sessions:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
+
 // =============== POST (Create new chat session) =============== 
 export async function POST(request: NextRequest) {
   try {

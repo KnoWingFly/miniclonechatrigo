@@ -17,6 +17,12 @@ import {
   X,
   Loader2,
   AlertCircle,
+  ChevronDown,
+  Plus,
+  MessageSquareOff,
+  Bot,
+  ChevronRight,
+  MessageSquarePlus,
 } from "lucide-react";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -44,13 +50,11 @@ export default function ChatPage() {
       id: "support",
       name: "Customer Support Bot",
       description: "Help with product questions and issues",
-      avatar: "💬",
     },
     {
       id: "chatrigo",
       name: "ChatRigo Bot",
       description: "Chatrigo assistant bot",
-      avatar: "🤖",
     },
   ];
 
@@ -66,6 +70,15 @@ export default function ChatPage() {
     setTimeout(() => {
       setNotification({ show: false, message: "", type: "info" });
     }, 3000);
+  };
+
+  const getInitials = (name: string) => {
+    return name
+      .split(" ")
+      .map((n) => n[0])
+      .join("")
+      .slice(0, 2)
+      .toUpperCase();
   };
 
   const handleCreateBot = async (bot: (typeof availableBots)[0]) => {
@@ -124,8 +137,33 @@ export default function ChatPage() {
     return session.messages[0].content;
   };
 
+  const markAsRead = async (sessionId: string) => {
+    setChatSessions((prev) =>
+      prev.map((session) => {
+        if (session.id === sessionId && session.messages?.length > 0) {
+          const updatedMessages = [...session.messages];
+          updatedMessages[0] = { ...updatedMessages[0], isRead: true };
+          return { ...session, messages: updatedMessages };
+        }
+        return session;
+      }),
+    );
+    try {
+      await fetch("/api/chat/messages", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ chatSessionId: sessionId }),
+      });
+    } catch (error) {
+      console.error("Failed to mark as read on server", error);
+    }
+  };
+
   useEffect(() => {
-    if (activeContactId) fetchMessages(activeContactId);
+    if (activeContactId) {
+      fetchMessages(activeContactId);
+      markAsRead(activeContactId); 
+    }
   }, [activeContactId]);
 
   useEffect(() => {
@@ -195,7 +233,7 @@ export default function ChatPage() {
       console.error("Error fetching messages:", error);
       setCurrentMessages([]);
     } finally {
-      setLoadingMessages(false); // End loading
+      setLoadingMessages(false);
     }
   };
 
@@ -213,10 +251,23 @@ export default function ChatPage() {
       createdAt: new Date().toISOString(),
     };
 
-    // Optimistic update - show message immediately
     setCurrentMessages([...currentMessages, tempMessage]);
     const messageToSend = inputMessage;
-    setInputMessage(""); // Clear input immediately
+    setInputMessage("");
+
+    setChatSessions((prev) =>
+      prev.map((session) =>
+        session.id === activeContactId
+          ? {
+              ...session,
+              updatedAt: new Date(),
+              messages: [
+                { ...tempMessage, isRead: true },
+              ],
+            }
+          : session,
+      ),
+    );
 
     try {
       const res = await fetch("/api/chat/messages", {
@@ -231,7 +282,6 @@ export default function ChatPage() {
       });
 
       if (!res.ok) {
-        // Rollback on error
         setCurrentMessages(currentMessages);
         setInputMessage(messageToSend);
         showNotification("Failed to send message", "error");
@@ -248,22 +298,8 @@ export default function ChatPage() {
 
       const data = await res.json();
       if (data.message) {
-        // Replace temp message with real one
         setCurrentMessages((prev) =>
           prev.map((msg) => (msg.id === tempMessage.id ? data.message : msg)),
-        );
-
-        // Update session timestamp without refetching
-        setChatSessions((prev) =>
-          prev.map((session) =>
-            session.id === activeContactId
-              ? {
-                  ...session,
-                  updatedAt: new Date(),
-                  messages: [data.message],
-                }
-              : session,
-          ),
         );
       }
     } catch (error) {
@@ -275,7 +311,7 @@ export default function ChatPage() {
   };
 
   return (
-    <div className="flex h-screen bg-gray-50 pt-[57px]">
+    <div className="flex h-screen bg-white pt-[60px] overflow-hidden">
       {/* Notification Toast */}
       {notification.show && (
         <div className="fixed top-20 right-4 z-[70] animate-in slide-in-from-top-2">
@@ -297,9 +333,9 @@ export default function ChatPage() {
         </div>
       )}
 
-      {/* Top Navigation Bar */}
-      <div className="fixed top-0 left-0 right-0 z-50 bg-orange-500">
-        <div className="flex items-center justify-between px-4 py-3">
+      {/* Top Navigation Bar*/}
+      <div className="fixed top-0 left-0 right-0 z-50 bg-orange-500 shadow-md h-[60px]">
+        <div className="flex items-center justify-between px-4 h-full">
           <div className="flex items-center gap-3">
             <Image
               src="/Logo/white_logo_with_white_text.png"
@@ -331,178 +367,154 @@ export default function ChatPage() {
         fixed lg:static inset-y-0 left-0 z-40 lg:pt-0
         w-80 bg-white border-r border-gray-200
         transform transition-transform duration-300 ease-in-out
+        flex flex-col h-full 
         ${isSidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}
       `}
       >
         {/* Sidebar Header */}
-        <div className="bg-orange-500">
-          <div className="flex items-center justify-between mb-4 px-4 pt-4">
+        <div className="bg-white px-4 pt-4 pb-2 flex-shrink-0">
+          <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
-              <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center">
-                <span className="text-orange-600 font-bold text-xl">C</span>
+              <div className="w-8 h-8 bg-orange-500 rounded-lg flex items-center justify-center">
+                <span className="text-white font-bold text-lg">C</span>
               </div>
-              <span className="text-white font-semibold text-lg">Chat</span>
+              <span className="text-gray-900 font-bold text-lg">Chats</span>
             </div>
-            <button className="lg:hidden text-white p-2 hover:bg-orange-600 rounded-lg transition-colors">
-              <MoreVertical size={20} />
+            <button
+              className="lg:hidden text-gray-600 p-2 hover:bg-gray-100 rounded-lg transition-colors"
+              onClick={() => setIsSidebarOpen(false)}
+            >
+              <X size={20} />
             </button>
           </div>
+
           {/* Search Bar */}
-          <div className="relative px-4 pb-4">
+          <div className="relative">
             <Search
-              className="absolute left-7 top-1/2 transform -translate-y-1/2 text-gray-400"
+              className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"
               size={18}
             />
             <input
               type="text"
-              placeholder="Search contact or messages"
-              className="w-full pl-10 pr-4 py-2.5 bg-white/90 backdrop-blur-sm border border-orange-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-300 focus:border-transparent placeholder-gray-500"
+              placeholder="Search..."
+              className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-transparent focus:bg-white focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10 rounded-xl text-sm transition-all outline-none"
             />
           </div>
         </div>
 
         {/* Filter Dropdown */}
-        <div className="px-4 py-3">
+        <div className="px-4 py-2 flex-shrink-0">
           <div className="relative">
             <Filter
-              className="absolute left-3 top-1/2 transform -translate-y-1/2 text-orange-500"
+              className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500"
               size={16}
             />
-            <select className="w-full pl-9 pr-4 py-2.5 bg-gradient-to-r from-orange-50 to-orange-100 border-2 border-orange-200 rounded-xl text-sm font-medium text-gray-700 focus:outline-none focus:ring-2 focus:ring-orange-400 focus:border-transparent appearance-none cursor-pointer hover:border-orange-300 transition-all">
+            <select className="w-full pl-10 pr-10 py-2.5 bg-white border border-gray-200 hover:border-orange-300 rounded-xl text-sm font-medium text-gray-700 focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 appearance-none cursor-pointer transition-all">
               <option value="all">All Chats</option>
               <option value="unread">Unread</option>
               <option value="ai">AI Only</option>
               <option value="human">Human Only</option>
               <option value="archived">Archived</option>
             </select>
-            <div className="absolute right-3 top-1/2 transform -translate-y-1/2 pointer-events-none">
-              <svg
-                className="w-4 h-4 text-orange-500"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M19 9l-7 7-7-7"
-                />
-              </svg>
-            </div>
+            <ChevronDown
+              className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 pointer-events-none"
+              size={16}
+            />
           </div>
         </div>
 
         {/* New AI Chat Button */}
-        <div className="px-4 pb-3">
+        <div className="px-4 pb-3 mt-1 flex-shrink-0">
           <button
             onClick={() => setShowBotModal(true)}
-            className="w-full px-4 py-3 bg-gradient-to-r from-orange-500 to-orange-600 text-white font-semibold rounded-lg hover:from-orange-600 hover:to-orange-700 transition-all flex items-center justify-center gap-2 shadow-md"
+            className="w-full px-4 py-3 bg-orange-500 hover:bg-orange-600 text-white font-semibold rounded-xl transition-all flex items-center justify-center gap-2 shadow-sm hover:shadow-md active:scale-[0.98]"
           >
-            <svg
-              className="w-5 h-5"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M12 4v16m8-8H4"
-              />
-            </svg>
+            <MessageSquarePlus size={20} />
             New AI Chat
           </button>
         </div>
 
-        {/*Contact List */}
-        <div className="overflow-y-auto h-[calc(100vh-305px)]">
+        {/* Contact List */}
+        <div className="flex-1 overflow-y-auto">
           {loading ? (
-            <div className="flex items-center justify-center py-8">
+            <div className="flex items-center justify-center py-12">
               <Loader2 className="w-8 h-8 text-orange-500 animate-spin" />
             </div>
           ) : chatSessions.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-8 px-4 text-center">
-              <div className="w-16 h-16 bg-orange-100 rounded-full flex items-center justify-center mb-3">
-                <svg
-                  className="w-8 h-8 text-orange-500"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
-                  />
-                </svg>
+            <div className="flex flex-col items-center justify-center py-12 px-6 text-center">
+              <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mb-4">
+                <MessageSquareOff className="w-8 h-8 text-gray-400" />
               </div>
-              <p className="text-gray-600 text-sm">No chats yet</p>
-              <p className="text-gray-400 text-xs mt-1">
+              <p className="text-gray-900 font-medium">No chats yet</p>
+              <p className="text-gray-500 text-sm mt-1">
                 Start a new AI chat to begin
               </p>
             </div>
           ) : (
-            chatSessions.map((contact) => (
-              <button
-                key={contact.id}
-                onClick={() => {
-                  setActiveContactId(contact.id);
-                  setIsSidebarOpen(false);
-                }}
-                className={`
-                  w-full p-4 flex items-start gap-3 border-b border-gray-100
-                  hover:bg-gray-50 transition-colors text-left
-                  ${activeContactId === contact.id ? "bg-orange-50 border-l-4 border-l-orange-500" : ""}
+            <div className="flex flex-col">
+              {chatSessions.map((contact) => (
+                <button
+                  key={contact.id}
+                  onClick={() => {
+                    setActiveContactId(contact.id);
+                    setIsSidebarOpen(false);
+                  }}
+                  className={`
+                  w-full p-4 flex items-start gap-3 border-l-4 border-transparent transition-all
+                  ${
+                    activeContactId === contact.id
+                      ? "bg-orange-50 border-l-orange-500"
+                      : "hover:bg-gray-50"
+                  }
                 `}
-              >
-                <Avatar className="w-12 h-12 flex-shrink-0">
-                  <AvatarImage
-                    src={contact.contactAvatar}
-                    alt={contact.contactName}
-                  />
-                  <AvatarFallback className="bg-gradient-to-br from-orange-400 to-orange-600 text-white font-semibold">
-                    {contact.contactName
-                      .split(" ")
-                      .map((n: string) => n[0])
-                      .join("")
-                      .slice(0, 2)}
-                  </AvatarFallback>
-                </Avatar>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between mb-1">
-                    <div className="flex items-center gap-1.5 flex-1 min-w-0">
-                      <h3 className="font-semibold text-gray-900 text-sm truncate">
-                        {contact.contactName}
-                      </h3>
-                      {contact.isAI && (
-                        <span className="px-1.5 py-0.5 bg-gradient-to-r from-orange-400 to-orange-500 text-white text-[10px] font-semibold rounded-full flex-shrink-0">
-                          AI
-                        </span>
-                      )}
-                    </div>
-                    <span className="text-xs text-gray-500 flex-shrink-0 ml-2">
-                      {new Date(contact.updatedAt).toLocaleTimeString("id-ID", {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <p className="text-sm text-gray-600 truncate flex-1">
-                      {getLastMessage(contact.id)}
-                    </p>
-                    {contact.messages?.[0]?.isRead === false && (
-                      <span className="ml-2 bg-orange-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center flex-shrink-0">
-                        1
+                >
+                  <Avatar className="w-12 h-12 flex-shrink-0 border border-gray-100">
+                    <AvatarFallback className="bg-orange-100 text-orange-600 font-semibold text-sm">
+                      {getInitials(contact.contactName)}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="flex-1 min-w-0 text-left">
+                    <div className="flex items-center justify-between mb-1">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <h3
+                          className={`font-medium text-sm truncate ${activeContactId === contact.id ? "text-orange-900" : "text-gray-900"}`}
+                        >
+                          {contact.contactName}
+                        </h3>
+                        {contact.isAI && (
+                          <span className="px-1.5 py-0.5 bg-gray-100 text-gray-600 text-[10px] font-semibold rounded border border-gray-200 flex-shrink-0">
+                            AI
+                          </span>
+                        )}
+                      </div>
+                      <span className="text-xs text-gray-400 flex-shrink-0 ml-2">
+                        {new Date(contact.updatedAt).toLocaleTimeString(
+                          "id-ID",
+                          {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          },
+                        )}
                       </span>
-                    )}
+                    </div>
+                    {/* Unread Message Counter */}
+                    <div className="flex items-center justify-between">
+                      <p className="text-sm text-gray-500 truncate flex-1">
+                        {getLastMessage(contact.id)}
+                      </p>
+                      {contact._count?.messages > 0 &&
+                        contact.id !== activeContactId && (
+                          <span className="ml-2 bg-orange-500 text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1">
+                            {contact._count.messages > 99
+                              ? "99+"
+                              : contact._count.messages}
+                          </span>
+                        )}
+                    </div>
                   </div>
-                </div>
-              </button>
-            ))
+                </button>
+              ))}
+            </div>
           )}
         </div>
       </div>
@@ -510,29 +522,29 @@ export default function ChatPage() {
       {/* Overlay Mobile */}
       {isSidebarOpen && (
         <div
-          className="fixed inset-0 bg-black bg-opacity-50 z-30 lg:hidden"
+          className="fixed inset-0 bg-black/20 backdrop-blur-sm z-30 lg:hidden"
           onClick={() => setIsSidebarOpen(false)}
         />
       )}
 
       {/* Bot Modal */}
       {showBotModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 z-[60] flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[80vh] overflow-hidden">
-            <div className="p-6 border-b border-gray-200 flex items-center justify-between">
-              <h2 className="text-2xl font-bold text-gray-900">
-                Start New AI Chat
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[60] flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl shadow-xl max-w-lg w-full max-h-[80vh] overflow-hidden flex flex-col">
+            <div className="p-5 border-b border-gray-100 flex items-center justify-between bg-white">
+              <h2 className="text-xl font-bold text-gray-900">
+                New Conversation
               </h2>
               <button
                 onClick={() => setShowBotModal(false)}
                 disabled={creatingBot}
-                className="p-2 hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-50"
+                className="p-2 hover:bg-gray-100 rounded-full transition-colors"
               >
-                <X size={24} className="text-gray-500" />
+                <X size={20} className="text-gray-500" />
               </button>
             </div>
-            <div className="p-6 overflow-y-auto max-h-[60vh]">
-              <div className="grid grid-cols-1 gap-4">
+            <div className="p-5 overflow-y-auto">
+              <div className="grid grid-cols-1 gap-3">
                 {availableBots.map((bot) => {
                   const isExisting = chatSessions.some(
                     (session) =>
@@ -543,45 +555,37 @@ export default function ChatPage() {
                       key={bot.id}
                       onClick={() => handleCreateBot(bot)}
                       disabled={creatingBot}
-                      className="p-4 border-2 border-gray-200 rounded-xl hover:border-orange-500 hover:bg-orange-50 transition-all text-left group disabled:opacity-50 disabled:cursor-not-allowed relative"
+                      className="group p-4 border border-gray-200 rounded-xl hover:border-orange-500 hover:bg-orange-50/50 transition-all text-left disabled:opacity-50 flex items-center gap-4"
                     >
+                      <div className="w-12 h-12 rounded-full bg-orange-100 flex items-center justify-center flex-shrink-0 group-hover:bg-orange-200 transition-colors">
+                        {creatingBot ? (
+                          <Loader2 className="w-6 h-6 text-orange-600 animate-spin" />
+                        ) : (
+                          <span className="text-orange-600 font-bold text-lg">
+                            {getInitials(bot.name)}
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="flex-1 min-w-0 py-1">
+                        <h3 className="font-semibold text-gray-900">
+                          {bot.name}
+                        </h3>
+                        <p className="text-gray-500 text-sm truncate">
+                          {bot.description}
+                        </p>
+                      </div>
+
                       {isExisting && (
-                        <span className="absolute top-2 right-2 px-2 py-1 bg-green-100 text-green-700 text-xs font-semibold rounded-full">
-                          Added
+                        <span className="flex items-center gap-1 text-green-600 text-xs font-medium bg-green-50 px-2.5 py-1 rounded-full flex-shrink-0">
+                          <Check size={12} /> Added
                         </span>
                       )}
-                      <div className="flex items-start gap-4">
-                        <div className="w-12 h-12 rounded-full bg-gradient-to-br from-orange-400 to-orange-600 flex items-center justify-center text-2xl flex-shrink-0">
-                          {creatingBot ? (
-                            <Loader2 className="w-6 h-6 text-white animate-spin" />
-                          ) : (
-                            bot.avatar
-                          )}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <h3 className="font-semibold text-gray-900 text-lg mb-1">
-                            {bot.name}
-                          </h3>
-                          <p className="text-gray-600 text-sm">
-                            {bot.description}
-                          </p>
-                        </div>
-                        <div className="text-orange-500 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <svg
-                            className="w-6 h-6"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M9 5l7 7-7 7"
-                            />
-                          </svg>
-                        </div>
-                      </div>
+
+                      <ChevronRight
+                        className="text-gray-300 group-hover:text-orange-500 transition-colors flex-shrink-0"
+                        size={20}
+                      />
                     </button>
                   );
                 })}
@@ -593,123 +597,86 @@ export default function ChatPage() {
 
       {/* Main Chat Area */}
       {!activeContactId ? (
-        <div className="flex-1 flex items-center justify-center bg-gray-50">
-          <div className="text-center max-w-md px-6">
-            <div className="w-32 h-32 mx-auto mb-6 bg-gradient-to-br from-orange-100 to-orange-200 rounded-full flex items-center justify-center">
-              <svg
-                className="w-16 h-16 text-orange-500"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
-                />
-              </svg>
+        <div className="flex-1 flex items-center justify-center bg-gray-50/50">
+          <div className="text-center max-w-sm px-6">
+            <div className="w-20 h-20 mx-auto mb-6 bg-white rounded-2xl shadow-sm border border-gray-100 flex items-center justify-center text-orange-500">
+              <Bot size={40} />
             </div>
-            <h2 className="text-2xl font-bold text-gray-900 mb-3">
-              Select a chat to start messaging
+            <h2 className="text-xl font-bold text-gray-900 mb-2">
+              Select a conversation
             </h2>
-            <p className="text-gray-600 mb-6">
-              Choose a conversation from the sidebar or start a new AI chat to
-              begin
+            <p className="text-gray-500 mb-8 leading-relaxed">
+              Choose a contact from the sidebar or start a new AI chat to begin
+              messaging
             </p>
             <button
               onClick={() => setShowBotModal(true)}
-              className="px-6 py-3 bg-gradient-to-r from-orange-500 to-orange-600 text-white font-semibold rounded-lg hover:from-orange-600 hover:to-orange-700 transition-all shadow-md"
+              className="px-6 py-3 bg-gray-900 text-white font-medium rounded-xl hover:bg-gray-800 transition-all flex items-center gap-2 mx-auto"
             >
-              Start New AI Chat
+              <Plus size={18} />
+              Start New Chat
             </button>
           </div>
         </div>
       ) : (
-        <div className="flex-1 flex flex-col bg-white">
+        <div className="flex-1 flex flex-col bg-white overflow-hidden">
           {/* Chat Header */}
-          <div className="p-4 border-b border-gray-200 bg-white shadow-sm">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <button
-                  onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-                  className="lg:hidden p-2 hover:bg-gray-100 rounded-lg transition-colors"
-                >
-                  <Menu size={24} className="text-gray-700" />
-                </button>
-                <Avatar className="w-10 h-10">
-                  <AvatarImage
-                    src={activeContact?.contactAvatar}
-                    alt={activeContact?.contactName}
+          <div className="h-[73px] px-6 border-b border-gray-100 flex items-center justify-between bg-white/80 backdrop-blur-md sticky top-0 z-10 flex-shrink-0">
+            <div className="flex items-center gap-4">
+              <button
+                onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+                className="lg:hidden p-2 -ml-2 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                <Menu size={24} className="text-gray-600" />
+              </button>
+              <Avatar className="w-10 h-10 border border-gray-100">
+                <AvatarFallback className="bg-orange-100 text-orange-600 font-semibold text-sm">
+                  {getInitials(activeContact?.contactName || "")}
+                </AvatarFallback>
+              </Avatar>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h2 className="font-semibold text-gray-900">
+                    {activeContact?.contactName}
+                  </h2>
+                  {activeContact?.isAI && (
+                    <span className="px-1.5 py-0.5 bg-gray-100 text-gray-600 text-[10px] font-semibold rounded border border-gray-200">
+                      AI
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span
+                    className={`w-2 h-2 rounded-full ${activeContact?.isOnline ? "bg-green-500" : "bg-gray-300"}`}
                   />
-                  <AvatarFallback className="bg-gradient-to-br from-orange-400 to-orange-600 text-white font-semibold">
-                    {activeContact?.contactName
-                      ?.split(" ")
-                      .map((n: string) => n[0])
-                      .join("")
-                      .slice(0, 2)}
-                  </AvatarFallback>
-                </Avatar>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <h2 className="font-semibold text-gray-900">
-                      {activeContact?.contactName}
-                    </h2>
-                    {activeContact?.isAI && (
-                      <span className="px-2 py-0.5 bg-gradient-to-r from-orange-400 to-orange-500 text-white text-xs font-semibold rounded-full">
-                        AI
-                      </span>
-                    )}
-                  </div>
-                  <p
-                    className={`text-xs ${activeContact?.isOnline ? "text-green-600" : "text-gray-400"}`}
-                  >
+                  <p className="text-xs text-gray-500">
                     {activeContact?.isOnline ? "Online" : "Offline"}
                   </p>
                 </div>
               </div>
-              <div className="flex items-center gap-2">
-                <button className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
-                  <MoreVertical size={20} className="text-gray-600" />
-                </button>
-              </div>
             </div>
+            <button className="p-2 hover:bg-gray-100 rounded-full transition-colors text-gray-500">
+              <MoreVertical size={20} />
+            </button>
           </div>
 
           {/* Messages Area */}
-          <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50">
+          <div className="flex-1 overflow-y-auto p-4 lg:p-6 space-y-6 bg-white scroll-smooth min-h-0">
             {loadingMessages ? (
               <div className="flex items-center justify-center h-full">
-                <div className="text-center">
-                  <Loader2 className="w-8 h-8 text-orange-500 animate-spin mx-auto mb-2" />
-                  <p className="text-sm text-gray-500">Loading messages...</p>
-                </div>
+                <Loader2 className="w-8 h-8 text-orange-500 animate-spin" />
               </div>
             ) : currentMessages.length === 0 ? (
-              <div className="flex items-center justify-center h-full">
-                <div className="text-center">
-                  <div className="w-16 h-16 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-3">
-                    <svg
-                      className="w-8 h-8 text-orange-500"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
-                      />
-                    </svg>
-                  </div>
-                  <p className="text-gray-600 text-sm font-medium">
-                    No messages yet
-                  </p>
-                  <p className="text-gray-400 text-xs mt-1">
-                    Start the conversation by sending a message
-                  </p>
+              <div className="flex flex-col items-center justify-center h-full text-center">
+                <div className="w-20 h-20 bg-gray-50 rounded-full flex items-center justify-center mb-4">
+                  <MessageSquareOff size={32} className="text-gray-400" />
                 </div>
+                <h3 className="text-lg font-medium text-gray-900">
+                  No messages yet
+                </h3>
+                <p className="text-gray-500 text-sm mt-1 max-w-xs mx-auto">
+                  Send a message to start the conversation.
+                </p>
               </div>
             ) : (
               <>
@@ -718,46 +685,40 @@ export default function ChatPage() {
                   return (
                     <div
                       key={message.id}
-                      className={`flex ${isMe ? "justify-end" : "justify-start"}`}
+                      className={`flex ${isMe ? "justify-end" : "justify-start"} group`}
                     >
                       <div
-                        className={`flex gap-2 max-w-[75%] ${isMe ? "flex-row-reverse" : "flex-row"}`}
+                        className={`flex gap-3 max-w-[85%] lg:max-w-[70%] ${isMe ? "flex-row-reverse" : "flex-row"}`}
                       >
                         {!isMe && (
-                          <Avatar className="w-8 h-8 flex-shrink-0">
-                            <AvatarFallback className="bg-gradient-to-br from-orange-400 to-orange-600 text-white text-xs">
-                              {message.senderName
-                                .split(" ")
-                                .map((n: string) => n[0])
-                                .join("")
-                                .slice(0, 2)}
+                          <Avatar className="w-8 h-8 flex-shrink-0 mt-1">
+                            <AvatarFallback className="bg-orange-100 text-orange-600 text-[10px] font-bold">
+                              {getInitials(message.senderName)}
                             </AvatarFallback>
                           </Avatar>
                         )}
                         <div>
                           {!isMe && (
-                            <p className="text-xs text-gray-600 mb-1 ml-1">
+                            <p className="text-[11px] font-medium text-gray-500 mb-1 ml-1">
                               {message.senderName}
                             </p>
                           )}
                           <div
                             className={`
-                    rounded-2xl px-4 py-3 shadow-sm
-                    ${
-                      isMe
-                        ? "bg-gradient-to-br from-orange-500 to-orange-600 text-white rounded-tr-sm"
-                        : "bg-white text-gray-800 border border-gray-200 rounded-tl-sm"
-                    }
-                  `}
+                            rounded-2xl px-5 py-3 shadow-sm text-[15px] leading-relaxed relative group-hover:shadow-md transition-shadow
+                            ${
+                              isMe
+                                ? "bg-orange-500 text-white rounded-tr-sm"
+                                : "bg-gray-100 text-gray-800 rounded-tl-sm"
+                            }
+                          `}
                           >
-                            <p className="text-sm leading-relaxed">
-                              {message.content}
-                            </p>
+                            <p>{message.content}</p>
                           </div>
                           <div
-                            className={`flex items-center gap-1 mt-1 ${isMe ? "justify-end" : "justify-start"}`}
+                            className={`flex items-center gap-1.5 mt-1.5 ${isMe ? "justify-end" : "justify-start"}`}
                           >
-                            <span className="text-xs text-gray-500">
+                            <span className="text-[10px] text-gray-400 font-medium">
                               {new Date(message.createdAt).toLocaleTimeString(
                                 "id-ID",
                                 {
@@ -767,11 +728,11 @@ export default function ChatPage() {
                               )}
                             </span>
                             {isMe && (
-                              <span className="text-gray-500">
+                              <span className="text-gray-400">
                                 {message.isRead ? (
                                   <CheckCheck
                                     size={14}
-                                    className="text-blue-500"
+                                    className="text-orange-500"
                                   />
                                 ) : message.isDelivered ? (
                                   <CheckCheck size={14} />
@@ -792,7 +753,7 @@ export default function ChatPage() {
           </div>
 
           {/* Input Area */}
-          <div className="p-4 bg-white border-t border-gray-200">
+          <div className="p-4 bg-white border-t border-gray-200 flex-shrink-0">
             <div className="flex items-center gap-2">
               <button className="p-2.5 hover:bg-gray-100 rounded-lg transition-colors flex-shrink-0">
                 <Smile size={24} className="text-gray-600" />
