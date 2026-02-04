@@ -50,6 +50,9 @@ export default function ChatPage() {
   const [creatingBot, setCreatingBot] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+
   const menuRef = useRef<HTMLDivElement>(null);
 
   const [modalConfig, setModalConfig] = useState<{
@@ -148,14 +151,21 @@ export default function ChatPage() {
   // Delete Session Function
   const handleDeleteSession = async () => {
     if (!activeContactId) return;
+    const idToDelete = activeContactId;
+
     try {
-      const res = await fetch(`/api/chat/sessions?id=${activeContactId}`, {
+      const res = await fetch(`/api/chat/sessions?id=${idToDelete}`, {
         method: "DELETE",
       });
+
       if (res.ok) {
+        setDeletingId(idToDelete);
+        await new Promise((resolve) => setTimeout(resolve, 300));
+
         setActiveContactId(null);
-        setChatSessions((prev) => prev.filter((s) => s.id !== activeContactId));
-        setShowMenu(false);
+        setChatSessions((prev) => prev.filter((s) => s.id !== idToDelete));
+        setDeletingId(null);
+
         showNotification("Conversation deleted", "success");
       }
     } catch (error) {
@@ -504,7 +514,9 @@ export default function ChatPage() {
             <input
               type="text"
               placeholder="Search..."
-              className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-transparent focus:bg-white focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10 rounded-xl text-sm transition-all outline-none"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-10 pr-4 py-2.5 bg-gray-50 ..."
             />
           </div>
         </div>
@@ -559,70 +571,80 @@ export default function ChatPage() {
             </div>
           ) : (
             <div className="flex flex-col">
-              {chatSessions.map((contact) => (
-                <button
-                  key={contact.id}
-                  onClick={() => {
-                    setActiveContactId(contact.id);
-                    setIsSidebarOpen(false);
-                  }}
-                  className={`
-      w-full p-4 flex items-start gap-3 border-l-4 border-transparent transition-all
-      ${
-        activeContactId === contact.id
-          ? "bg-orange-50 border-l-orange-500"
-          : "hover:bg-gray-50"
-      }
-    `}
-                >
-                  <Avatar className="w-12 h-12 flex-shrink-0 border border-gray-100">
-                    <AvatarFallback className="bg-orange-100 text-orange-600 font-semibold text-sm">
-                      {getInitials(contact.contactName)}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div className="flex-1 min-w-0 text-left">
-                    <div className="flex items-center justify-between mb-1">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <h3
-                          className={`font-medium text-sm truncate ${activeContactId === contact.id ? "text-orange-900" : "text-gray-900"}`}
-                        >
-                          {contact.contactName}
-                        </h3>
-                        {/* AI Badge */}
-                        {contact.isAI && (
-                          <span className="px-1.5 py-0.5 bg-gradient-to-r from-orange-400 to-orange-500 text-white text-[10px] font-semibold rounded-full flex-shrink-0">
-                            AI
-                          </span>
-                        )}
+              {chatSessions
+                .filter((contact) =>
+                  contact.contactName
+                    .toLowerCase()
+                    .includes(searchQuery.toLowerCase()),
+                )
+                .map((contact) => (
+                  <button
+                    key={contact.id}
+                    onClick={() => {
+                      setActiveContactId(contact.id);
+                      setIsSidebarOpen(false);
+                    }}
+                    className={`
+                    w-full p-4 flex items-start gap-3 border-l-4 transition-all duration-300 ease-in-out
+                    ${
+                      activeContactId === contact.id
+                        ? "bg-orange-50 border-l-orange-500"
+                        : "hover:bg-gray-50 border-l-transparent"
+                    }
+                    ${
+                      deletingId === contact.id
+                        ? "opacity-0 scale-95 -translate-x-full max-h-0 p-0 overflow-hidden"
+                        : "opacity-100 max-h-24"
+                    }
+                  `}
+                  >
+                    <Avatar className="w-12 h-12 flex-shrink-0 border border-gray-100">
+                      <AvatarFallback className="bg-orange-100 text-orange-600 font-semibold text-sm">
+                        {getInitials(contact.contactName)}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="flex-1 min-w-0 text-left">
+                      <div className="flex items-center justify-between mb-1">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <h3
+                            className={`font-medium text-sm truncate ${activeContactId === contact.id ? "text-orange-900" : "text-gray-900"}`}
+                          >
+                            {contact.contactName}
+                          </h3>
+                          {contact.isAI && (
+                            <span className="px-1.5 py-0.5 bg-gradient-to-r from-orange-400 to-orange-500 text-white text-[10px] font-semibold rounded-full flex-shrink-0">
+                              AI
+                            </span>
+                          )}
+                        </div>
+                        <span className="text-xs text-gray-400 flex-shrink-0 ml-2">
+                          {new Date(contact.updatedAt).toLocaleTimeString(
+                            "id-ID",
+                            {
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            },
+                          )}
+                        </span>
                       </div>
-                      <span className="text-xs text-gray-400 flex-shrink-0 ml-2">
-                        {new Date(contact.updatedAt).toLocaleTimeString(
-                          "id-ID",
-                          {
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          },
-                        )}
-                      </span>
-                    </div>
 
-                    {/* Unread Message Counter */}
-                    <div className="flex items-center justify-between">
-                      <p className="text-sm text-gray-500 truncate flex-1">
-                        {getLastMessage(contact.id)}
-                      </p>
-                      {contact._count?.messages > 0 &&
-                        contact.id !== activeContactId && (
-                          <span className="ml-2 bg-orange-500 text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1">
-                            {contact._count.messages > 99
-                              ? "99+"
-                              : contact._count.messages}
-                          </span>
-                        )}
+                      {/* Unread Message Counter */}
+                      <div className="flex items-center justify-between">
+                        <p className="text-sm text-gray-500 truncate flex-1">
+                          {getLastMessage(contact.id)}
+                        </p>
+                        {contact._count?.messages > 0 &&
+                          contact.id !== activeContactId && (
+                            <span className="ml-2 bg-orange-500 text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1">
+                              {contact._count.messages > 99
+                                ? "99+"
+                                : contact._count.messages}
+                            </span>
+                          )}
+                      </div>
                     </div>
-                  </div>
-                </button>
-              ))}
+                  </button>
+                ))}
             </div>
           )}
         </div>
