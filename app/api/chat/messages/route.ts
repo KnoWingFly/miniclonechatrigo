@@ -12,14 +12,12 @@ export async function GET(request: NextRequest) {
     } = await supabase.auth.getUser();
 
     if (error || !user) {
-      console.log("GET messages - No user authenticated");
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     const { searchParams } = new URL(request.url);
     const chatSessionId = searchParams.get("chatSessionId");
-
-    console.log("GET messages - Request for sessionId:", chatSessionId);
+    const limit = parseInt(searchParams.get("limit") || "50");
 
     if (!chatSessionId) {
       return NextResponse.json(
@@ -28,60 +26,37 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Find or create user
-    let dbUser = await prisma.user.findUnique({
-      where: { supabaseId: user.id },
+    // Verification
+    const session = await prisma.chatSession.findFirst({
+      where: {
+        id: chatSessionId,
+        user: { supabaseId: user.id }, 
+      },
+      select: { id: true },
     });
-
-    if (!dbUser) {
-      console.log("GET messages - Creating new user:", user.id);
-      dbUser = await prisma.user.create({
-        data: {
-          supabaseId: user.id,
-          email: user.email || "",
-          name: user.user_metadata?.name || user.email?.split("@")[0],
-        },
-      });
-    }
-
-    console.log("GET messages - Current user ID:", dbUser.id);
-
-    // Check if session exists
-    const session = await prisma.chatSession.findUnique({
-      where: { id: chatSessionId },
-    });
-
-    console.log(
-      "GET messages - Session found:",
-      !!session,
-      "Session userId:",
-      session?.userId,
-    );
 
     if (!session) {
-      console.log("GET messages - Session not found, returning empty messages");
       return NextResponse.json({ messages: [] });
     }
 
-    if (session.userId !== dbUser.id) {
-      console.log(
-        "GET messages - User mismatch! Session user:",
-        session.userId,
-        "Current user:",
-        dbUser.id,
-      );
-      return NextResponse.json({ messages: [] });
-    }
-
-    // Fetch messages
+    // Fetch messages with pagination and specific fields
     const messages = await prisma.message.findMany({
       where: { chatSessionId },
-      orderBy: { createdAt: "asc" },
+      orderBy: { createdAt: "desc" },
+      take: limit,
+      select: {
+        id: true,
+        content: true,
+        senderId: true,
+        senderName: true,
+        isRead: true,
+        isDelivered: true,
+        createdAt: true,
+      },
     });
 
-    console.log("GET messages - Found", messages.length, "messages");
-
-    return NextResponse.json({ messages });
+    // Reverse to show in chronological order
+    return NextResponse.json({ messages: messages.reverse() });
   } catch (error) {
     console.error("GET messages - Error:", error);
     return NextResponse.json(

@@ -6,40 +6,45 @@ import { prisma } from "@/lib/db";
 export async function GET(request: NextRequest) {
   try {
     const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    
-    const dbUser = await prisma.user.findUnique({
-      where: { supabaseId: user.id },
-      select: { id: true } 
-    });
-
-    if (!dbUser) return NextResponse.json({ sessions: [] });
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user)
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     const sessions = await prisma.chatSession.findMany({
-      where: { userId: dbUser.id },
+      where: {
+        user: { supabaseId: user.id },
+      },
       select: {
         id: true,
         contactName: true,
+        contactAvatar: true,
         isAI: true,
+        isOnline: true,
         updatedAt: true,
         _count: {
           select: {
-            messages: { where: { isRead: false, senderId: { not: 'user' } } }
-          }
+            messages: { where: { isRead: false, senderId: { not: "user" } } },
+          },
         },
         messages: {
-          orderBy: { createdAt: 'desc' },
+          orderBy: { createdAt: "desc" },
           take: 1,
-          select: { content: true } 
-        }
+          select: { content: true, createdAt: true },
+        },
       },
-      orderBy: { updatedAt: 'desc' },
+      orderBy: { updatedAt: "desc" },
+      take: 50, 
     });
-    
+
     return NextResponse.json({ sessions });
   } catch (error) {
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    console.error("GET sessions - Error:", error);
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 },
+    );
   }
 }
 
