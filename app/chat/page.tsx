@@ -49,6 +49,7 @@ export default function ChatPage() {
   const [showBotModal, setShowBotModal] = useState(false);
   const [creatingBot, setCreatingBot] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
   const [modalConfig, setModalConfig] = useState<{
@@ -112,12 +113,14 @@ export default function ChatPage() {
   }, []);
 
   // Handle Modal Action
-  const handleConfirmAction = () => {
+  const handleConfirmAction = async () => {
+    setIsProcessing(true);
     if (modalConfig.type === "clear") {
-      handleClearChat();
+      await handleClearChat();
     } else if (modalConfig.type === "delete") {
-      handleDeleteSession();
+      await handleDeleteSession();
     }
+    setIsProcessing(false);
     setModalConfig({ isOpen: false, type: null });
   };
 
@@ -792,20 +795,43 @@ export default function ChatPage() {
                     </p>
                   </div>
 
+                  {/* Clear Chat Button*/}
                   <button
+                    disabled={currentMessages.length === 0}
                     onClick={() => {
                       setShowMenu(false);
                       setModalConfig({ isOpen: true, type: "clear" });
                     }}
-                    className="w-full px-4 py-3 text-left text-sm text-gray-700 hover:bg-orange-50 hover:text-orange-600 transition-colors flex items-center gap-3 group"
+                    className={`w-full px-4 py-3 text-left text-sm flex items-center gap-3 group transition-colors ${
+                      currentMessages.length === 0
+                        ? "opacity-40 cursor-not-allowed bg-gray-50"
+                        : "text-gray-700 hover:bg-orange-50 hover:text-orange-600"
+                    }`}
                   >
-                    <div className="w-8 h-8 rounded-lg bg-gray-50 flex items-center justify-center group-hover:bg-orange-100 transition-colors">
+                    <div
+                      className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${
+                        currentMessages.length === 0
+                          ? "bg-gray-200"
+                          : "bg-gray-50 group-hover:bg-orange-100"
+                      }`}
+                    >
                       <MessageSquareOff
                         size={16}
-                        className="text-gray-500 group-hover:text-orange-600"
+                        className={
+                          currentMessages.length === 0
+                            ? "text-gray-400"
+                            : "text-gray-500 group-hover:text-orange-600"
+                        }
                       />
                     </div>
-                    <span className="font-medium">Clear Chat</span>
+                    <div className="flex flex-col">
+                      <span className="font-medium">Clear Chat</span>
+                      {currentMessages.length === 0 && (
+                        <span className="text-[10px] text-gray-400">
+                          No messages to clear
+                        </span>
+                      )}
+                    </div>
                   </button>
 
                   <button
@@ -964,10 +990,11 @@ export default function ChatPage() {
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 animate-in fade-in duration-200">
           <div
             className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm"
-            onClick={() => setModalConfig({ isOpen: false, type: null })}
+            onClick={() =>
+              !isProcessing && setModalConfig({ isOpen: false, type: null })
+            }
           />
 
-          {/* Modal Content */}
           <div className="relative bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6 overflow-hidden animate-in zoom-in-95 duration-200">
             <div className="flex flex-col items-center text-center">
               <div
@@ -977,7 +1004,9 @@ export default function ChatPage() {
                     : "bg-orange-50 text-orange-500"
                 }`}
               >
-                {modalConfig.type === "delete" ? (
+                {isProcessing ? (
+                  <Loader2 size={28} className="animate-spin" />
+                ) : modalConfig.type === "delete" ? (
                   <Trash2 size={28} />
                 ) : (
                   <MessageSquareOff size={28} />
@@ -991,27 +1020,34 @@ export default function ChatPage() {
               </h3>
 
               <p className="text-gray-500 text-sm leading-relaxed mb-8">
-                {modalConfig.type === "delete"
-                  ? `This will permanently delete your conversation with ${activeContact?.contactName}. You cannot undo this action.`
-                  : `Are you sure you want to delete all messages? The contact will stay in your sidebar, but the history will be gone.`}
+                {isProcessing
+                  ? "Processing your request, please wait..."
+                  : modalConfig.type === "delete"
+                    ? `This will permanently delete your conversation with ${activeContact?.contactName}.`
+                    : "Are you sure you want to delete all messages? History will be gone."}
               </p>
 
               <div className="flex gap-3 w-full">
                 <button
+                  disabled={isProcessing}
                   onClick={() => setModalConfig({ isOpen: false, type: null })}
-                  className="flex-1 px-4 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold rounded-xl transition-colors"
+                  className="flex-1 px-4 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold rounded-xl transition-colors disabled:opacity-50"
                 >
                   Cancel
                 </button>
                 <button
+                  disabled={isProcessing}
                   onClick={handleConfirmAction}
-                  className={`flex-1 px-4 py-3 text-white font-semibold rounded-xl transition-all shadow-md active:scale-[0.98] ${
+                  className={`flex-1 px-4 py-3 text-white font-semibold rounded-xl transition-all shadow-md flex items-center justify-center gap-2 ${
                     modalConfig.type === "delete"
-                      ? "bg-red-500 hover:bg-red-600 shadow-red-200"
-                      : "bg-orange-500 hover:bg-orange-600 shadow-orange-200"
-                  }`}
+                      ? "bg-red-500 hover:bg-red-600 shadow-red-100"
+                      : "bg-orange-500 hover:bg-orange-600 shadow-orange-100"
+                  } disabled:opacity-70 disabled:cursor-not-allowed`}
                 >
-                  Confirm
+                  {isProcessing && (
+                    <Loader2 size={18} className="animate-spin" />
+                  )}
+                  {isProcessing ? "Processing..." : "Confirm"}
                 </button>
               </div>
             </div>
