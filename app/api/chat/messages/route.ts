@@ -100,100 +100,30 @@ export async function POST(request: NextRequest) {
     const supabase = await createClient();
     const {
       data: { user },
-      error,
     } = await supabase.auth.getUser();
-
-    if (error || !user) {
-      console.log("POST message - No user authenticated");
+    if (!user)
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
 
-    const body = await request.json();
-    const { chatSessionId, senderId, senderName, content } = body;
+    const { chatSessionId, content, senderName } = await request.json();
 
-    console.log("POST message - Request:", {
-      chatSessionId,
-      senderId,
-      senderName,
-    });
-
-    if (!chatSessionId || !senderId || !senderName || !content) {
-      return NextResponse.json(
-        { error: "Missing required fields" },
-        { status: 400 },
-      );
-    }
-
-    // Find or create user
-    let dbUser = await prisma.user.findUnique({
-      where: { supabaseId: user.id },
-    });
-
-    if (!dbUser) {
-      console.log("POST message - Creating new user:", user.id);
-      dbUser = await prisma.user.create({
+    const [newMessage] = await prisma.$transaction([
+      prisma.message.create({
         data: {
-          supabaseId: user.id,
-          email: user.email || "",
-          name: user.user_metadata?.name || user.email?.split("@")[0],
+          chatSessionId,
+          content,
+          senderId: "user",
+          senderName,
         },
-      });
-    }
+      }),
+      prisma.chatSession.update({
+        where: { id: chatSessionId },
+        data: { updatedAt: new Date() },
+      }),
+    ]);
 
-    console.log("POST message - Current user ID:", dbUser.id);
-
-    // Check if session exists
-    const session = await prisma.chatSession.findUnique({
-      where: { id: chatSessionId },
-    });
-
-    console.log(
-      "POST message - Session found:",
-      !!session,
-      "Session userId:",
-      session?.userId,
-    );
-
-    if (!session) {
-      console.log("POST message - Session not found!");
-      return NextResponse.json(
-        { error: "Chat session not found" },
-        { status: 404 },
-      );
-    }
-
-    if (session.userId !== dbUser.id) {
-      console.log("POST message - User mismatch!");
-      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
-    }
-
-    // Create message
-    const message = await prisma.message.create({
-      data: {
-        chatSessionId,
-        senderId,
-        senderName,
-        content,
-        isDelivered: true,
-        isRead: false,
-      },
-    });
-
-    console.log("POST message - Message created:", message.id);
-
-    // Update session timestamp
-    await prisma.chatSession.update({
-      where: { id: chatSessionId },
-      data: { updatedAt: new Date() },
-    });
-
-    return NextResponse.json({ message }, { status: 201 });
+    return NextResponse.json({ message: newMessage }, { status: 201 });
   } catch (error) {
-    console.error("POST message - Error:", error);
-    return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 },
-    );
+    return NextResponse.json({ error: "Failed" }, { status: 500 });
   }
 }
 
