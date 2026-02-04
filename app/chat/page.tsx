@@ -25,6 +25,7 @@ import {
   Bot,
   ChevronRight,
   MessageSquarePlus,
+  Trash2,
 } from "lucide-react";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -47,6 +48,14 @@ export default function ChatPage() {
   const [inputMessage, setInputMessage] = useState("");
   const [showBotModal, setShowBotModal] = useState(false);
   const [creatingBot, setCreatingBot] = useState(false);
+  const [showMenu, setShowMenu] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  const [modalConfig, setModalConfig] = useState<{
+    isOpen: boolean;
+    type: "clear" | "delete" | null;
+  }>({ isOpen: false, type: null });
+
   const [notification, setNotification] = useState<{
     show: boolean;
     message: string;
@@ -91,6 +100,67 @@ export default function ChatPage() {
     checkUser();
   }, [supabase, router]);
 
+  // Close menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setShowMenu(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  // Handle Modal Action
+  const handleConfirmAction = () => {
+    if (modalConfig.type === "clear") {
+      handleClearChat();
+    } else if (modalConfig.type === "delete") {
+      handleDeleteSession();
+    }
+    setModalConfig({ isOpen: false, type: null });
+  };
+
+  // Clear Chat Function
+  const handleClearChat = async () => {
+    if (!activeContactId) return;
+    try {
+      const res = await fetch(
+        `/api/chat/messages?chatSessionId=${activeContactId}`,
+        {
+          method: "DELETE",
+        },
+      );
+      if (res.ok) {
+        setCurrentMessages([]);
+        setShowMenu(false);
+        showNotification("Chat cleared successfully", "success");
+        fetchChatSessions();
+      }
+    } catch (error) {
+      showNotification("Failed to clear chat", "error");
+    }
+  };
+
+  // Delete Session Function
+  const handleDeleteSession = async () => {
+    if (!activeContactId) return;
+    try {
+      const res = await fetch(`/api/chat/sessions?id=${activeContactId}`, {
+        method: "DELETE",
+      });
+      if (res.ok) {
+        setActiveContactId(null);
+        setChatSessions((prev) => prev.filter((s) => s.id !== activeContactId));
+        setShowMenu(false);
+        showNotification("Conversation deleted", "success");
+      }
+    } catch (error) {
+      showNotification("Failed to delete session", "error");
+    }
+  };
+
+  // Scroll to bottom
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [currentMessages]);
@@ -699,9 +769,60 @@ export default function ChatPage() {
                 </div>
               </div>
             </div>
-            <button className="p-2 hover:bg-gray-100 rounded-full transition-colors text-gray-500">
-              <MoreVertical size={20} />
-            </button>
+
+            {/* Dropdown Menu Container */}
+            <div className="relative" ref={menuRef}>
+              <button
+                onClick={() => setShowMenu(!showMenu)}
+                className={`p-2 rounded-full transition-all ${
+                  showMenu
+                    ? "bg-orange-50 text-orange-500 shadow-sm"
+                    : "hover:bg-gray-100 text-gray-500"
+                }`}
+              >
+                <MoreVertical size={20} />
+              </button>
+
+              {/* The Dropdown Bubble */}
+              {showMenu && (
+                <div className="absolute right-0 mt-2 w-52 bg-white rounded-2xl shadow-xl border border-gray-100 py-2 z-[60] animate-in fade-in zoom-in-95 duration-200 origin-top-right">
+                  <div className="px-4 py-2 mb-1 border-b border-gray-50">
+                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+                      Chat Options
+                    </p>
+                  </div>
+
+                  <button
+                    onClick={() => {
+                      setShowMenu(false);
+                      setModalConfig({ isOpen: true, type: "clear" });
+                    }}
+                    className="w-full px-4 py-3 text-left text-sm text-gray-700 hover:bg-orange-50 hover:text-orange-600 transition-colors flex items-center gap-3 group"
+                  >
+                    <div className="w-8 h-8 rounded-lg bg-gray-50 flex items-center justify-center group-hover:bg-orange-100 transition-colors">
+                      <MessageSquareOff
+                        size={16}
+                        className="text-gray-500 group-hover:text-orange-600"
+                      />
+                    </div>
+                    <span className="font-medium">Clear Chat</span>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      setShowMenu(false);
+                      setModalConfig({ isOpen: true, type: "delete" });
+                    }}
+                    className="w-full px-4 py-3 text-left text-sm text-red-600 hover:bg-red-50 transition-colors flex items-center gap-3 group"
+                  >
+                    <div className="w-8 h-8 rounded-lg bg-red-50 flex items-center justify-center group-hover:bg-red-100">
+                      <Trash2 size={16} className="text-red-500" />
+                    </div>
+                    <span className="font-medium">Delete Session</span>
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Messages Area */}
@@ -834,6 +955,65 @@ export default function ChatPage() {
               >
                 <Send size={20} />
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Confirmation Modal */}
+      {modalConfig.isOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div
+            className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm"
+            onClick={() => setModalConfig({ isOpen: false, type: null })}
+          />
+
+          {/* Modal Content */}
+          <div className="relative bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6 overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="flex flex-col items-center text-center">
+              <div
+                className={`w-14 h-14 rounded-full flex items-center justify-center mb-4 ${
+                  modalConfig.type === "delete"
+                    ? "bg-red-50 text-red-500"
+                    : "bg-orange-50 text-orange-500"
+                }`}
+              >
+                {modalConfig.type === "delete" ? (
+                  <Trash2 size={28} />
+                ) : (
+                  <MessageSquareOff size={28} />
+                )}
+              </div>
+
+              <h3 className="text-xl font-bold text-gray-900 mb-2">
+                {modalConfig.type === "delete"
+                  ? "Delete Conversation?"
+                  : "Clear Chat History?"}
+              </h3>
+
+              <p className="text-gray-500 text-sm leading-relaxed mb-8">
+                {modalConfig.type === "delete"
+                  ? `This will permanently delete your conversation with ${activeContact?.contactName}. You cannot undo this action.`
+                  : `Are you sure you want to delete all messages? The contact will stay in your sidebar, but the history will be gone.`}
+              </p>
+
+              <div className="flex gap-3 w-full">
+                <button
+                  onClick={() => setModalConfig({ isOpen: false, type: null })}
+                  className="flex-1 px-4 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold rounded-xl transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleConfirmAction}
+                  className={`flex-1 px-4 py-3 text-white font-semibold rounded-xl transition-all shadow-md active:scale-[0.98] ${
+                    modalConfig.type === "delete"
+                      ? "bg-red-500 hover:bg-red-600 shadow-red-200"
+                      : "bg-orange-500 hover:bg-orange-600 shadow-orange-200"
+                  }`}
+                >
+                  Confirm
+                </button>
+              </div>
             </div>
           </div>
         </div>

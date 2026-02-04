@@ -223,7 +223,6 @@ export async function PATCH(request: NextRequest) {
       );
     }
 
-    // 1. Verify User
     const dbUser = await prisma.user.findUnique({
       where: { supabaseId: user.id },
     });
@@ -233,12 +232,10 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
-    // 2. Perform Update
-    // We explicitly check for messages where senderId is NOT 'user'
     const updateResult = await prisma.message.updateMany({
       where: {
         chatSessionId: chatSessionId,
-        senderId: { not: "user" }, // Ensure we don't mark our own messages as "read by us"
+        senderId: { not: "user" },
         isRead: false,
       },
       data: {
@@ -256,6 +253,43 @@ export async function PATCH(request: NextRequest) {
     console.error("PATCH message - Error:", error);
     return NextResponse.json(
       { error: "Internal server error" },
+      { status: 500 },
+    );
+  }
+}
+
+// =============== DELETE (Clear all messages in a session) ===============
+export async function DELETE(request: NextRequest) {
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user)
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+    const { searchParams } = new URL(request.url);
+    const chatSessionId = searchParams.get("chatSessionId");
+
+    if (!chatSessionId)
+      return NextResponse.json(
+        { error: "Required ID missing" },
+        { status: 400 },
+      );
+
+    const session = await prisma.chatSession.findFirst({
+      where: { id: chatSessionId, user: { supabaseId: user.id } },
+    });
+
+    if (!session)
+      return NextResponse.json({ error: "Session not found" }, { status: 404 });
+
+    await prisma.message.deleteMany({ where: { chatSessionId } });
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    return NextResponse.json(
+      { error: "Failed to clear chat" },
       { status: 500 },
     );
   }
