@@ -494,13 +494,13 @@ export default function ChatPage() {
                     setIsSidebarOpen(false);
                   }}
                   className={`
-                  w-full p-4 flex items-start gap-3 border-l-4 border-transparent transition-all
-                  ${
-                    activeContactId === contact.id
-                      ? "bg-orange-50 border-l-orange-500"
-                      : "hover:bg-gray-50"
-                  }
-                `}
+      w-full p-4 flex items-start gap-3 border-l-4 border-transparent transition-all
+      ${
+        activeContactId === contact.id
+          ? "bg-orange-50 border-l-orange-500"
+          : "hover:bg-gray-50"
+      }
+    `}
                 >
                   <Avatar className="w-12 h-12 flex-shrink-0 border border-gray-100">
                     <AvatarFallback className="bg-orange-100 text-orange-600 font-semibold text-sm">
@@ -515,8 +515,9 @@ export default function ChatPage() {
                         >
                           {contact.contactName}
                         </h3>
+                        {/* AI Badge */}
                         {contact.isAI && (
-                          <span className="px-1.5 py-0.5 bg-gray-100 text-gray-600 text-[10px] font-semibold rounded border border-gray-200 flex-shrink-0">
+                          <span className="px-1.5 py-0.5 bg-gradient-to-r from-orange-400 to-orange-500 text-white text-[10px] font-semibold rounded-full flex-shrink-0">
                             AI
                           </span>
                         )}
@@ -531,6 +532,7 @@ export default function ChatPage() {
                         )}
                       </span>
                     </div>
+
                     {/* Unread Message Counter */}
                     <div className="flex items-center justify-between">
                       <p className="text-sm text-gray-500 truncate flex-1">
@@ -682,7 +684,7 @@ export default function ChatPage() {
                     {activeContact?.contactName}
                   </h2>
                   {activeContact?.isAI && (
-                    <span className="px-1.5 py-0.5 bg-gray-100 text-gray-600 text-[10px] font-semibold rounded border border-gray-200">
+                    <span className="px-1.5 py-0.5 bg-gradient-to-r from-orange-400 to-orange-500 text-white text-[10px] font-semibold rounded-full">
                       AI
                     </span>
                   )}
