@@ -8,11 +8,28 @@ export async function GET(request: Request) {
     // ambil code dari url
     const code = requestUrl.searchParams.get('code')
 
-    // check code, kalo exist makae exchangeCodeForSession
+    // check code, kalo exist make exchangeCodeForSession
     if (code) {
         const supabase = await createClient()
-        await supabase.auth.exchangeCodeForSession(code)
+        const { error } = await supabase.auth.exchangeCodeForSession(code)
+        
+        if (!error) {
+            const { data: { user } } = await supabase.auth.getUser()
+            
+            if (user) {
+                try {
+                    await fetch(`${requestUrl.origin}/api/auth/sync-user`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                    })
+                } catch (error) {
+                    console.error('Failed to sync user after OAuth:', error)
+              }
+            }
+        }
     }
 
-    return NextResponse.redirect(new URL('/chat',requestUrl.origin))
+    return NextResponse.redirect(new URL('/chat', requestUrl.origin))
 }
