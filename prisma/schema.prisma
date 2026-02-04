@@ -1,16 +1,52 @@
 generator client {
-  provider = "prisma-client"
-  output   = "../app/generated/prisma"
+  provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "postgresql"
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  name      String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id           String        @id @default(cuid())
+  supabaseId   String        @unique
+  email        String        @unique
+  name         String?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  chatSessions ChatSession[]
+}
+
+model ChatSession {
+  id            String    @id @default(cuid())
+  userId        String
+  contactName   String
+  contactAvatar String?
+  isAI          Boolean   @default(false)
+  isOnline      Boolean   @default(false)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages      Message[]
+
+  @@index([userId])
+  @@index([updatedAt])
+  @@index([userId, updatedAt])
+}
+
+model Message {
+  id            String      @id @default(cuid())
+  chatSessionId String
+  senderId      String
+  senderName    String
+  content       String      @db.Text
+  isRead        Boolean     @default(false)
+  isDelivered   Boolean     @default(true)
+  createdAt     DateTime    @default(now())
+  chatSession   ChatSession @relation(fields: [chatSessionId], references: [id], onDelete: Cascade)
+
+  @@index([chatSessionId])
+  @@index([createdAt])
+  @@index([chatSessionId, createdAt])
 }

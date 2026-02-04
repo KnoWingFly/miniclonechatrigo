@@ -20,7 +20,7 @@ export default function SignInPage() {
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
       if (event === 'SIGNED_IN') {
-        router.push('/');
+        router.push('/chat');
       }
     });
 
