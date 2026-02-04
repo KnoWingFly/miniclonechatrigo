@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Send,
   Menu,
@@ -40,190 +40,85 @@ interface Message {
   isDelivered: boolean;
 }
 
-// DUMMY DATA
-const dummyContacts: Contact[] = [
-  {
-    id: "1",
-    name: "John Doe",
-    avatar: "",
-    lastMessage: "Harga paket Starlingling berapa yah ?",
-    timestamp: "12:03",
-    unreadCount: 1,
-    isOnline: true,
-    isAI: true,
-  },
-  {
-    id: "2",
-    name: "Meteor",
-    avatar: "",
-    lastMessage: "Saya mau beli UFO-nya 1",
-    timestamp: "22:03",
-    isOnline: true,
-    isAI: false,
-  },
-  {
-    id: "3",
-    name: "John Wick",
-    avatar: "",
-    lastMessage: "I need a new pencil",
-    timestamp: "Yesterday",
-    isOnline: false,
-    isAI: false,
-  },
-  {
-    id: "4",
-    name: "Endministrator",
-    avatar: "",
-    lastMessage: "Factory... Must... Grow... Up",
-    timestamp: "Yesterday",
-    isOnline: false,
-    isAI: true,
-  },
-];
-
-const messagesByContact: Record<string, Message[]> = {
-  "1": [
-    {
-      id: "msg-1-1",
-      senderId: "1",
-      senderName: "John Doe",
-      content: "Pagi, saya mau bertanya",
-      timestamp: "10:45",
-      isRead: true,
-      isDelivered: true,
-    },
-    {
-      id: "msg-1-2",
-      senderId: "me",
-      senderName: "You",
-      content: "Siang, ada yang bisa saya bantu",
-      timestamp: "12:00",
-      isRead: true,
-      isDelivered: true,
-    },
-    {
-      id: "msg-1-3",
-      senderId: "1",
-      senderName: "John Doe",
-      content: "Harga paket Starlingling berapa yah ?",
-      timestamp: "12:03",
-      isRead: false,
-      isDelivered: true,
-    },
-  ],
-  "2": [
-    {
-      id: "msg-2-1",
-      senderId: "2",
-      senderName: "Meteor",
-      content: "Halo, saya tertarik dengan produk UFO",
-      timestamp: "21:30",
-      isRead: true,
-      isDelivered: true,
-    },
-    {
-      id: "msg-2-2",
-      senderId: "me",
-      senderName: "You",
-      content: "Baik, ada yang bisa saya jelaskan?",
-      timestamp: "21:45",
-      isRead: true,
-      isDelivered: true,
-    },
-    {
-      id: "msg-2-3",
-      senderId: "2",
-      senderName: "Meteor",
-      content: "Saya mau beli UFO-nya 1",
-      timestamp: "22:03",
-      isRead: true,
-      isDelivered: true,
-    },
-  ],
-  "3": [
-    {
-      id: "msg-3-1",
-      senderId: "3",
-      senderName: "John Wick",
-      content: "I need a new pencil",
-      timestamp: "Yesterday",
-      isRead: true,
-      isDelivered: true,
-    },
-    {
-      id: "msg-3-2",
-      senderId: "me",
-      senderName: "You",
-      content: "Which one ?",
-      timestamp: "03:10",
-      isRead: false,
-      isDelivered: false,
-    },
-  ],
-  "4": [
-    {
-      id: "msg-4-1",
-      senderId: "4",
-      senderName: "Endministrator",
-      content: "Factory... Must... Grow... Up",
-      timestamp: "Yesterday",
-      isRead: true,
-      isDelivered: true,
-    },
-    {
-      id: "msg-4-2",
-      senderId: "me",
-      senderName: "You",
-      content: "Get Some Help",
-      timestamp: "10:15",
-      isRead: true,
-      isDelivered: true,
-    },
-  ],
-};
-
 export default function ChatPage() {
+  const [chatSessions, setChatSessions] = useState<any[]>([]);
+  const [currentMessages, setCurrentMessages] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [activeContactId, setActiveContactId] = useState("1");
-  const [messagesByContactState, setMessagesByContactState] =
-    useState<Record<string, Message[]>>(messagesByContact);
+  const [activeContactId, setActiveContactId] = useState<string | null>(null);
   const [inputMessage, setInputMessage] = useState("");
-  const activeContact = dummyContacts.find((c) => c.id === activeContactId);
-  const currentMessages = messagesByContactState[activeContactId] || [];
 
-  // Helper function to get last message for a contact
-  const getLastMessage = (contactId: string): string => {
-    const messages = messagesByContactState[contactId] || [];
-    if (messages.length === 0) return "No messages yet";
-    return messages[messages.length - 1].content;
+  // Derive activeContact from sessions
+  const activeContact = chatSessions.find(
+    (session) => session.id === activeContactId,
+  );
+
+  // Get last message helper
+  const getLastMessage = (sessionId: string): string => {
+    const session = chatSessions.find((s) => s.id === sessionId);
+    if (!session || !session.messages || session.messages.length === 0)
+      return "No messages yet";
+    return session.messages[0].content;
+  };
+
+  // Fetch messages when active contact changes
+  useEffect(() => {
+    if (activeContactId) fetchMessages(activeContactId);
+  }, [activeContactId]);
+
+  // Fetching on mount
+  useEffect(() => {
+    fetchChatSessions();
+  }, []);
+  const fetchChatSessions = async () => {
+    try {
+      const res = await fetch("/api/chat/sessions");
+      const data = await res.json();
+      if (data.sessions) {
+        setChatSessions(data.sessions);
+      }
+    } catch (error) {
+      console.error("Error fetching sessions:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Fetch (session changes)
+  const fetchMessages = async (sessionId: string) => {
+    try {
+      const res = await fetch(`/api/chat/messages?chatSessionId=${sessionId}`);
+      const data = await res.json();
+      if (data.messages) {
+        setCurrentMessages(data.messages);
+      }
+    } catch (error) {
+      console.error("Error fetching messages:", error);
+    }
   };
 
   // Send message function
-  const handleSendMessage = () => {
-    if (!inputMessage.trim()) return;
-
-    const newMessage: Message = {
-      id: `msg-${activeContactId}-${Date.now()}`,
-      senderId: "me",
-      senderName: "You",
-      content: inputMessage,
-      timestamp: new Date().toLocaleTimeString("id-ID", {
-        hour: "2-digit",
-        minute: "2-digit",
-      }),
-      isRead: false,
-      isDelivered: true,
-    };
-
-    setMessagesByContactState({
-      ...messagesByContactState,
-      [activeContactId]: [
-        ...(messagesByContactState[activeContactId] || []),
-        newMessage,
-      ],
-    });
-
-    setInputMessage("");
+  const handleSendMessage = async () => {
+    if (!inputMessage.trim() || !activeContactId) return;
+    try {
+      const res = await fetch("/api/chat/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          chatSessionId: activeContactId,
+          senderId: "user",
+          senderName: "You",
+          content: inputMessage,
+        }),
+      });
+      const data = await res.json();
+      if (data.message) {
+        setCurrentMessages([...currentMessages, data.message]);
+        setInputMessage("");
+      }
+    } catch (error) {
+      console.error("Error sending message:", error);
+    }
   };
 
   return (
@@ -326,7 +221,7 @@ export default function ChatPage() {
 
         {/*Contact List */}
         <div className="overflow-y-auto h-[calc(100vh-305px)]">
-          {dummyContacts.map((contact) => (
+          {chatSessions.map((contact) => (
             <button
               key={contact.id}
               onClick={() => {
@@ -340,11 +235,14 @@ export default function ChatPage() {
       `}
             >
               <Avatar className="w-12 h-12 flex-shrink-0">
-                <AvatarImage src={contact.avatar} alt={contact.name} />
+                <AvatarImage
+                  src={contact.contactAvatar}
+                  alt={contact.contactName}
+                />
                 <AvatarFallback className="bg-gradient-to-br from-orange-400 to-orange-600 text-white font-semibold">
-                  {contact.name
+                  {contact.contactName
                     .split(" ")
-                    .map((n) => n[0])
+                    .map((n: string) => n[0])
                     .join("")
                     .slice(0, 2)}
                 </AvatarFallback>
@@ -353,7 +251,7 @@ export default function ChatPage() {
                 <div className="flex items-center justify-between mb-1">
                   <div className="flex items-center gap-1.5 flex-1 min-w-0">
                     <h3 className="font-semibold text-gray-900 text-sm truncate">
-                      {contact.name}
+                      {contact.contactName}
                     </h3>
                     {contact.isAI && (
                       <span className="px-1.5 py-0.5 bg-gradient-to-r from-orange-400 to-orange-500 text-white text-[10px] font-semibold rounded-full flex-shrink-0">
@@ -362,16 +260,19 @@ export default function ChatPage() {
                     )}
                   </div>
                   <span className="text-xs text-gray-500 flex-shrink-0 ml-2">
-                    {contact.timestamp}
+                    {new Date(contact.updatedAt).toLocaleTimeString("id-ID", {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
                   </span>
                 </div>
                 <div className="flex items-center justify-between">
                   <p className="text-sm text-gray-600 truncate flex-1">
                     {getLastMessage(contact.id)}
                   </p>
-                  {contact.unreadCount && (
+                  {contact.messages?.[0]?.isRead === false && (
                     <span className="ml-2 bg-orange-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center flex-shrink-0">
-                      {contact.unreadCount}
+                      1
                     </span>
                   )}
                 </div>
@@ -403,13 +304,13 @@ export default function ChatPage() {
               </button>
               <Avatar className="w-10 h-10">
                 <AvatarImage
-                  src={activeContact?.avatar}
-                  alt={activeContact?.name}
+                  src={activeContact?.contactAvatar}
+                  alt={activeContact?.contactName}
                 />
                 <AvatarFallback className="bg-gradient-to-br from-orange-400 to-orange-600 text-white font-semibold">
-                  {activeContact?.name
-                    .split(" ")
-                    .map((n) => n[0])
+                  {activeContact?.contactName
+                    ?.split(" ")
+                    .map((n: string) => n[0])
                     .join("")
                     .slice(0, 2)}
                 </AvatarFallback>
@@ -417,7 +318,7 @@ export default function ChatPage() {
               <div>
                 <div className="flex items-center gap-2">
                   <h2 className="font-semibold text-gray-900">
-                    {activeContact?.name}
+                    {activeContact?.contactName}
                   </h2>
                   {activeContact?.isAI && (
                     <span className="px-2 py-0.5 bg-gradient-to-r from-orange-400 to-orange-500 text-white text-xs font-semibold rounded-full">
@@ -457,7 +358,7 @@ export default function ChatPage() {
                       <AvatarFallback className="bg-gradient-to-br from-orange-400 to-orange-600 text-white text-xs">
                         {message.senderName
                           .split(" ")
-                          .map((n) => n[0])
+                          .map((n: string) => n[0])
                           .join("")
                           .slice(0, 2)}
                       </AvatarFallback>
