@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import {
   Send,
   Menu,
@@ -20,33 +20,11 @@ import {
 } from "lucide-react";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Description } from "@radix-ui/react-dialog";
-
-// TS interface
-interface Contact {
-  id: string;
-  name: string;
-  avatar?: string;
-  lastMessage: string;
-  timestamp: string;
-  unreadCount?: number;
-  isOnline?: boolean;
-  isAI?: boolean;
-}
-
-interface Message {
-  id: string;
-  senderId: string;
-  senderName: string;
-  content: string;
-  timestamp: string;
-  isRead: boolean;
-  isDelivered: boolean;
-}
 
 export default function ChatPage() {
   const [chatSessions, setChatSessions] = useState<any[]>([]);
   const [currentMessages, setCurrentMessages] = useState<any[]>([]);
+  const [loadingMessages, setLoadingMessages] = useState(false);
   const [loading, setLoading] = useState(true);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [activeContactId, setActiveContactId] = useState<string | null>(null);
@@ -59,7 +37,8 @@ export default function ChatPage() {
     type: "success" | "error" | "info";
   }>({ show: false, message: "", type: "info" });
 
-  //Bots data (Dummy)
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
   const availableBots = [
     {
       id: "support",
@@ -75,7 +54,10 @@ export default function ChatPage() {
     },
   ];
 
-  // Show notification helper
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [currentMessages]);
+
   const showNotification = (
     message: string,
     type: "success" | "error" | "info",
@@ -86,7 +68,6 @@ export default function ChatPage() {
     }, 3000);
   };
 
-  //Create Bot Function
   const handleCreateBot = async (bot: (typeof availableBots)[0]) => {
     try {
       const existingBot = chatSessions.find(
@@ -101,6 +82,7 @@ export default function ChatPage() {
       }
 
       setCreatingBot(true);
+
       const res = await fetch("/api/chat/sessions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -131,12 +113,10 @@ export default function ChatPage() {
     }
   };
 
-  // Derive activeContact from sessions
   const activeContact = chatSessions.find(
     (session) => session.id === activeContactId,
   );
 
-  // Get last message helper
   const getLastMessage = (sessionId: string): string => {
     const session = chatSessions.find((s) => s.id === sessionId);
     if (!session || !session.messages || session.messages.length === 0)
@@ -144,12 +124,10 @@ export default function ChatPage() {
     return session.messages[0].content;
   };
 
-  // Fetch messages when active contact changes
   useEffect(() => {
     if (activeContactId) fetchMessages(activeContactId);
   }, [activeContactId]);
 
-  // Fetching on mount
   useEffect(() => {
     fetchChatSessions();
   }, []);
@@ -182,10 +160,13 @@ export default function ChatPage() {
     }
   };
 
-  // Fetch (session changes)
   const fetchMessages = async (sessionId: string) => {
     try {
+      setLoadingMessages(true);
+      setCurrentMessages([]);
+
       const res = await fetch(`/api/chat/messages?chatSessionId=${sessionId}`);
+
       if (res.status === 404) {
         setCurrentMessages([]);
         return;
@@ -213,12 +194,30 @@ export default function ChatPage() {
     } catch (error) {
       console.error("Error fetching messages:", error);
       setCurrentMessages([]);
+    } finally {
+      setLoadingMessages(false); // End loading
     }
   };
 
-  // Send message function
   const handleSendMessage = async () => {
     if (!inputMessage.trim() || !activeContactId) return;
+
+    const tempMessage = {
+      id: `temp-${Date.now()}`,
+      chatSessionId: activeContactId,
+      senderId: "user",
+      senderName: "You",
+      content: inputMessage,
+      isDelivered: false,
+      isRead: false,
+      createdAt: new Date().toISOString(),
+    };
+
+    // Optimistic update - show message immediately
+    setCurrentMessages([...currentMessages, tempMessage]);
+    const messageToSend = inputMessage;
+    setInputMessage(""); // Clear input immediately
+
     try {
       const res = await fetch("/api/chat/messages", {
         method: "POST",
@@ -227,28 +226,50 @@ export default function ChatPage() {
           chatSessionId: activeContactId,
           senderId: "user",
           senderName: "You",
-          content: inputMessage,
+          content: messageToSend,
         }),
       });
 
       if (!res.ok) {
+        // Rollback on error
+        setCurrentMessages(currentMessages);
+        setInputMessage(messageToSend);
         showNotification("Failed to send message", "error");
         return;
       }
 
       const contentType = res.headers.get("content-type");
       if (!contentType || !contentType.includes("application/json")) {
+        setCurrentMessages(currentMessages);
+        setInputMessage(messageToSend);
         showNotification("Invalid server response", "error");
         return;
       }
 
       const data = await res.json();
       if (data.message) {
-        setCurrentMessages([...currentMessages, data.message]);
-        setInputMessage("");
+        // Replace temp message with real one
+        setCurrentMessages((prev) =>
+          prev.map((msg) => (msg.id === tempMessage.id ? data.message : msg)),
+        );
+
+        // Update session timestamp without refetching
+        setChatSessions((prev) =>
+          prev.map((session) =>
+            session.id === activeContactId
+              ? {
+                  ...session,
+                  updatedAt: new Date(),
+                  messages: [data.message],
+                }
+              : session,
+          ),
+        );
       }
     } catch (error) {
       console.error("Error sending message:", error);
+      setCurrentMessages(currentMessages);
+      setInputMessage(messageToSend);
       showNotification("Failed to send message", "error");
     }
   };
@@ -498,7 +519,6 @@ export default function ChatPage() {
       {showBotModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 z-[60] flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[80vh] overflow-hidden">
-            {/* Modal Header */}
             <div className="p-6 border-b border-gray-200 flex items-center justify-between">
               <h2 className="text-2xl font-bold text-gray-900">
                 Start New AI Chat
@@ -511,7 +531,6 @@ export default function ChatPage() {
                 <X size={24} className="text-gray-500" />
               </button>
             </div>
-            {/* Bot List */}
             <div className="p-6 overflow-y-auto max-h-[60vh]">
               <div className="grid grid-cols-1 gap-4">
                 {availableBots.map((bot) => {
@@ -571,11 +590,11 @@ export default function ChatPage() {
           </div>
         </div>
       )}
+
+      {/* Main Chat Area */}
       {!activeContactId ? (
-        // Empty State
         <div className="flex-1 flex items-center justify-center bg-gray-50">
           <div className="text-center max-w-md px-6">
-            {/* Icon */}
             <div className="w-32 h-32 mx-auto mb-6 bg-gradient-to-br from-orange-100 to-orange-200 rounded-full flex items-center justify-center">
               <svg
                 className="w-16 h-16 text-orange-500"
@@ -591,19 +610,13 @@ export default function ChatPage() {
                 />
               </svg>
             </div>
-
-            {/* Title */}
             <h2 className="text-2xl font-bold text-gray-900 mb-3">
               Select a chat to start messaging
             </h2>
-
-            {/* Subtitle */}
             <p className="text-gray-600 mb-6">
               Choose a conversation from the sidebar or start a new AI chat to
               begin
             </p>
-
-            {/* Quick Action Button */}
             <button
               onClick={() => setShowBotModal(true)}
               className="px-6 py-3 bg-gradient-to-r from-orange-500 to-orange-600 text-white font-semibold rounded-lg hover:from-orange-600 hover:to-orange-700 transition-all shadow-md"
@@ -665,70 +678,117 @@ export default function ChatPage() {
 
           {/* Messages Area */}
           <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50">
-            {currentMessages.map((message) => {
-              const isMe = message.senderId === "me";
-              return (
-                <div
-                  key={message.id}
-                  className={`flex ${isMe ? "justify-end" : "justify-start"}`}
-                >
-                  <div
-                    className={`flex gap-2 max-w-[75%] ${isMe ? "flex-row-reverse" : "flex-row"}`}
-                  >
-                    {!isMe && (
-                      <Avatar className="w-8 h-8 flex-shrink-0">
-                        <AvatarFallback className="bg-gradient-to-br from-orange-400 to-orange-600 text-white text-xs">
-                          {message.senderName
-                            .split(" ")
-                            .map((n: string) => n[0])
-                            .join("")
-                            .slice(0, 2)}
-                        </AvatarFallback>
-                      </Avatar>
-                    )}
-                    <div>
-                      {!isMe && (
-                        <p className="text-xs text-gray-600 mb-1 ml-1">
-                          {message.senderName}
-                        </p>
-                      )}
+            {loadingMessages ? (
+              <div className="flex items-center justify-center h-full">
+                <div className="text-center">
+                  <Loader2 className="w-8 h-8 text-orange-500 animate-spin mx-auto mb-2" />
+                  <p className="text-sm text-gray-500">Loading messages...</p>
+                </div>
+              </div>
+            ) : currentMessages.length === 0 ? (
+              <div className="flex items-center justify-center h-full">
+                <div className="text-center">
+                  <div className="w-16 h-16 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                    <svg
+                      className="w-8 h-8 text-orange-500"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
+                      />
+                    </svg>
+                  </div>
+                  <p className="text-gray-600 text-sm font-medium">
+                    No messages yet
+                  </p>
+                  <p className="text-gray-400 text-xs mt-1">
+                    Start the conversation by sending a message
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <>
+                {currentMessages.map((message) => {
+                  const isMe = message.senderId === "user";
+                  return (
+                    <div
+                      key={message.id}
+                      className={`flex ${isMe ? "justify-end" : "justify-start"}`}
+                    >
                       <div
-                        className={`
-                          rounded-2xl px-4 py-3 shadow-sm
-                          ${
-                            isMe
-                              ? "bg-gradient-to-br from-orange-500 to-orange-600 text-white rounded-tr-sm"
-                              : "bg-white text-gray-800 border border-gray-200 rounded-tl-sm"
-                          }
-                        `}
+                        className={`flex gap-2 max-w-[75%] ${isMe ? "flex-row-reverse" : "flex-row"}`}
                       >
-                        <p className="text-sm leading-relaxed">
-                          {message.content}
-                        </p>
-                      </div>
-                      <div
-                        className={`flex items-center gap-1 mt-1 ${isMe ? "justify-end" : "justify-start"}`}
-                      >
-                        <span className="text-xs text-gray-500">
-                          {message.timestamp}
-                        </span>
-                        {isMe && (
-                          <span className="text-gray-500">
-                            {message.isRead ? (
-                              <CheckCheck size={14} className="text-blue-500" />
-                            ) : message.isDelivered ? (
-                              <CheckCheck size={14} />
-                            ) : (
-                              <Check size={14} />
-                            )}
-                          </span>
+                        {!isMe && (
+                          <Avatar className="w-8 h-8 flex-shrink-0">
+                            <AvatarFallback className="bg-gradient-to-br from-orange-400 to-orange-600 text-white text-xs">
+                              {message.senderName
+                                .split(" ")
+                                .map((n: string) => n[0])
+                                .join("")
+                                .slice(0, 2)}
+                            </AvatarFallback>
+                          </Avatar>
                         )}
+                        <div>
+                          {!isMe && (
+                            <p className="text-xs text-gray-600 mb-1 ml-1">
+                              {message.senderName}
+                            </p>
+                          )}
+                          <div
+                            className={`
+                    rounded-2xl px-4 py-3 shadow-sm
+                    ${
+                      isMe
+                        ? "bg-gradient-to-br from-orange-500 to-orange-600 text-white rounded-tr-sm"
+                        : "bg-white text-gray-800 border border-gray-200 rounded-tl-sm"
+                    }
+                  `}
+                          >
+                            <p className="text-sm leading-relaxed">
+                              {message.content}
+                            </p>
+                          </div>
+                          <div
+                            className={`flex items-center gap-1 mt-1 ${isMe ? "justify-end" : "justify-start"}`}
+                          >
+                            <span className="text-xs text-gray-500">
+                              {new Date(message.createdAt).toLocaleTimeString(
+                                "id-ID",
+                                {
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                },
+                              )}
+                            </span>
+                            {isMe && (
+                              <span className="text-gray-500">
+                                {message.isRead ? (
+                                  <CheckCheck
+                                    size={14}
+                                    className="text-blue-500"
+                                  />
+                                ) : message.isDelivered ? (
+                                  <CheckCheck size={14} />
+                                ) : (
+                                  <Check size={14} />
+                                )}
+                              </span>
+                            )}
+                          </div>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                </div>
-              );
-            })}
+                  );
+                })}
+                <div ref={messagesEndRef} />
+              </>
+            )}
           </div>
 
           {/* Input Area */}

@@ -31,6 +31,7 @@ model ChatSession {
   messages      Message[]
 
   @@index([userId])
+  @@index([updatedAt]) 
 }
 
 model Message {
@@ -45,4 +46,5 @@ model Message {
   chatSession   ChatSession @relation(fields: [chatSessionId], references: [id], onDelete: Cascade)
 
   @@index([chatSessionId])
+  @@index([createdAt])
 }
