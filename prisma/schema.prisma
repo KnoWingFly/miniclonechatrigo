@@ -28,11 +28,25 @@ model ChatSession {
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
   user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  botId         String?
+  bot           Bot?      @relation(fields: [botId], references: [id])
   messages      Message[]
 
   @@index([userId])
   @@index([updatedAt])
   @@index([userId, updatedAt])
+  @@index([botId])
+}
+
+model Bot {
+  id           String        @id @default(cuid())
+  name         String
+  description  String
+  avatar       String?
+  systemPrompt String        @db.Text
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  chatSessions ChatSession[]
 }
 
 model Message {
