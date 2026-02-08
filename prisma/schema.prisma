@@ -1,21 +1,24 @@
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
 }
 
 datasource db {
-  provider  = "postgresql"
-  url       = env("DATABASE_URL")
-  directUrl = env("DIRECT_URL")
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  directUrl  = env("DIRECT_URL")
+  extensions = [pgvector(map: "vector")]
 }
 
 model User {
-  id           String        @id @default(cuid())
-  supabaseId   String        @unique
-  email        String        @unique
-  name         String?
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
-  chatSessions ChatSession[]
+  id              String           @id @default(cuid())
+  supabaseId      String           @unique
+  email           String           @unique
+  name            String?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  chatSessions    ChatSession[]
+  userPreferences UserPreference[]
 }
 
 model ChatSession {
@@ -28,11 +31,26 @@ model ChatSession {
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
   user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  botId         String?
+  bot           Bot?      @relation(fields: [botId], references: [id])
   messages      Message[]
 
   @@index([userId])
   @@index([updatedAt])
   @@index([userId, updatedAt])
+  @@index([botId])
+}
+
+model Bot {
+  id           String          @id @default(cuid())
+  name         String
+  description  String
+  avatar       String?
+  systemPrompt String          @db.Text
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+  chatSessions ChatSession[]
+  knowledge    KnowledgeBase[]
 }
 
 model Message {
@@ -49,4 +67,36 @@ model Message {
   @@index([chatSessionId])
   @@index([createdAt])
   @@index([chatSessionId, createdAt])
+}
+
+model KnowledgeBase {
+  id        String                      @id @default(cuid())
+  botId     String
+  bot       Bot                         @relation(fields: [botId], references: [id], onDelete: Cascade)
+  category  String
+  title     String
+  content   String                      @db.Text
+  embedding Unsupported("vector(768)")?
+  metadata  Json?
+  createdAt DateTime                    @default(now())
+  updatedAt DateTime                    @updatedAt
+
+  @@index([botId])
+  @@index([category])
+  @@index([createdAt])
+}
+
+model UserPreference {
+  id         String                      @id @default(cuid())
+  userId     String
+  preference String                      @db.Text
+  embedding  Unsupported("vector(768)")?
+  source     String
+  confidence Float                       @default(1.0)
+  createdAt  DateTime                    @default(now())
+  user       User                        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([source])
+  @@index([confidence])
 }

@@ -30,7 +30,7 @@ export async function GET(request: NextRequest) {
     const session = await prisma.chatSession.findFirst({
       where: {
         id: chatSessionId,
-        user: { supabaseId: user.id }, 
+        user: { supabaseId: user.id },
       },
       select: { id: true },
     });
@@ -76,10 +76,47 @@ export async function POST(request: NextRequest) {
     const {
       data: { user },
     } = await supabase.auth.getUser();
-    if (!user)
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    const { chatSessionId, content, senderName } = await request.json();
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const body = await request.json();
+    const { chatSessionId, content, senderName, systemPrompt, historyLimit } =
+      body;
+
+    if (!chatSessionId || !content) {
+      return NextResponse.json(
+        { error: "Missing required fields" },
+        { status: 400 },
+      );
+    }
+
+    // Get database user
+    const dbUser = await prisma.user.findUnique({
+      where: { supabaseId: user.id },
+    });
+
+    if (!dbUser) {
+      return NextResponse.json({ error: "User not found" }, { status: 404 });
+    }
+
+    // Check if this is an AI chat session
+    const session = await prisma.chatSession.findFirst({
+      where: {
+        id: chatSessionId,
+        userId: dbUser.id,
+      },
+      select: {
+        id: true,
+        isAI: true,
+        botId: true,
+      },
+    });
+
+    if (!session) {
+      return NextResponse.json({ error: "Session not found" }, { status: 404 });
+    }
 
     const [newMessage] = await prisma.$transaction([
       prisma.message.create({
@@ -87,7 +124,7 @@ export async function POST(request: NextRequest) {
           chatSessionId,
           content,
           senderId: "user",
-          senderName,
+          senderName: senderName || "You",
         },
       }),
       prisma.chatSession.update({
@@ -98,6 +135,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ message: newMessage }, { status: 201 });
   } catch (error) {
+    console.error("POST message error:", error);
     return NextResponse.json({ error: "Failed" }, { status: 500 });
   }
 }

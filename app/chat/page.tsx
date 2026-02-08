@@ -26,9 +26,17 @@ import {
   ChevronRight,
   MessageSquarePlus,
   Trash2,
+  Edit,
+  UserCog,
+  Book,
 } from "lucide-react";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+
+import { KnowledgeManager } from "@/components/knowledge-manager";
+import { PreferencesViewer } from "@/components/preferences-viewer";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 export default function ChatPage() {
   const supabase = createClient();
@@ -52,13 +60,20 @@ export default function ChatPage() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [isAITyping, setIsAITyping] = useState(false);
+
+  // RAG State
+  const [showKnowledgeModal, setShowKnowledgeModal] = useState(false);
+  const [showPreferencesModal, setShowPreferencesModal] = useState(false);
 
   const menuRef = useRef<HTMLDivElement>(null);
 
   const [modalConfig, setModalConfig] = useState<{
     isOpen: boolean;
-    type: "clear" | "delete" | null;
+    type: "clear" | "delete" | "edit-prompt" | null;
   }>({ isOpen: false, type: null });
+
+  const [newSystemPrompt, setNewSystemPrompt] = useState("");
 
   const [notification, setNotification] = useState<{
     show: boolean;
@@ -68,18 +83,8 @@ export default function ChatPage() {
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  const availableBots = [
-    {
-      id: "support",
-      name: "Customer Support Bot",
-      description: "Help with product questions and issues",
-    },
-    {
-      id: "chatrigo",
-      name: "ChatRigo Bot",
-      description: "Chatrigo assistant bot",
-    },
-  ];
+  const [availableBots, setAvailableBots] = useState<any[]>([]);
+  const [loadingBots, setLoadingBots] = useState(false);
 
   // Auth check
   useEffect(() => {
@@ -94,6 +99,7 @@ export default function ChatPage() {
         } else {
           setUser(user);
           fetchChatSessions();
+          fetchBots();
           setIsAuthChecking(false);
         }
       } catch (error) {
@@ -103,6 +109,21 @@ export default function ChatPage() {
     };
     checkUser();
   }, [supabase, router]);
+
+  const fetchBots = async () => {
+    try {
+      setLoadingBots(true);
+      const res = await fetch("/api/bots");
+      if (res.ok) {
+        const data = await res.json();
+        setAvailableBots(data.bots || []);
+      }
+    } catch (error) {
+      console.error("Failed to fetch bots", error);
+    } finally {
+      setLoadingBots(false);
+    }
+  };
 
   // Close menu when clicking outside
   useEffect(() => {
@@ -122,6 +143,19 @@ export default function ChatPage() {
       await handleClearChat();
     } else if (modalConfig.type === "delete") {
       await handleDeleteSession();
+    } else if (modalConfig.type === "edit-prompt") {
+      if (activeContact?.botId) {
+        try {
+          await fetch(`/api/bots/${activeContact.botId}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ systemPrompt: newSystemPrompt }),
+          });
+          showNotification("System prompt updated!", "success");
+        } catch (e) {
+          showNotification("Failed to update prompt", "error");
+        }
+      }
     }
     setIsProcessing(false);
     setModalConfig({ isOpen: false, type: null });
@@ -218,6 +252,7 @@ export default function ChatPage() {
         body: JSON.stringify({
           contactName: bot.name,
           isAI: true,
+          botId: bot.id,
         }),
       });
 
@@ -363,21 +398,28 @@ export default function ChatPage() {
       createdAt: new Date().toISOString(),
     };
 
-    setCurrentMessages([...currentMessages, tempMessage]);
+    setCurrentMessages((prev) => [...prev, tempMessage]);
     const messageToSend = inputMessage;
     setInputMessage("");
 
-    setChatSessions((prev) =>
-      prev.map((session) =>
-        session.id === activeContactId
-          ? {
-              ...session,
-              updatedAt: new Date(),
-              messages: [{ ...tempMessage, isRead: true }],
-            }
-          : session,
-      ),
-    );
+    // Update session list order immediately (move to top)
+    setChatSessions((prev) => {
+      const existing = prev.find((s) => s.id === activeContactId);
+      if (!existing) return prev;
+      const others = prev.filter((s) => s.id !== activeContactId);
+      return [
+        {
+          ...existing,
+          updatedAt: new Date().toISOString(),
+          messages: [
+            { content: messageToSend, createdAt: new Date().toISOString() },
+          ], // optimistic last message
+        },
+        ...others,
+      ];
+    });
+
+    const isAISession = activeContact?.isAI;
 
     try {
       const res = await fetch("/api/chat/messages", {
@@ -391,32 +433,73 @@ export default function ChatPage() {
         }),
       });
 
-      if (!res.ok) {
-        setCurrentMessages(currentMessages);
-        setInputMessage(messageToSend);
-        showNotification("Failed to send message", "error");
-        return;
-      }
-
-      const contentType = res.headers.get("content-type");
-      if (!contentType || !contentType.includes("application/json")) {
-        setCurrentMessages(currentMessages);
-        setInputMessage(messageToSend);
-        showNotification("Invalid server response", "error");
-        return;
-      }
-
       const data = await res.json();
+
+      let actualMessageId = tempMessage.id;
+
       if (data.message) {
+        actualMessageId = data.message.id;
+        // Update temp message with real one (shows 2 ticks)
         setCurrentMessages((prev) =>
-          prev.map((msg) => (msg.id === tempMessage.id ? data.message : msg)),
+          prev.map((msg) =>
+            msg.id === tempMessage.id
+              ? { ...data.message, isDelivered: true }
+              : msg,
+          ),
         );
+      }
+
+      if (isAISession) {
+        setIsAITyping(true);
+        setTimeout(async () => {
+          try {
+            const aiRes = await fetch("/api/chat/ai", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ chatSessionId: activeContactId }),
+            });
+
+            const aiData = await aiRes.json();
+
+            if (aiData.aiMessage) {
+              setCurrentMessages((prev) =>
+                prev
+                  .map((msg) =>
+                    msg.id === actualMessageId ? { ...msg, isRead: true } : msg,
+                  )
+                  .concat(aiData.aiMessage),
+              );
+              // Update session preview again with AI response
+              setChatSessions((prev) => {
+                const existing = prev.find((s) => s.id === activeContactId);
+                if (!existing) return prev;
+                const others = prev.filter((s) => s.id !== activeContactId);
+                return [
+                  {
+                    ...existing,
+                    updatedAt: new Date().toISOString(),
+                    messages: [
+                      {
+                        content: aiData.aiMessage.content,
+                        createdAt: new Date().toISOString(),
+                      },
+                    ],
+                  },
+                  ...others,
+                ];
+              });
+            }
+          } catch (err) {
+            console.error("AI trigger failed", err);
+          } finally {
+            setIsAITyping(false);
+          }
+        }, 500);
       }
     } catch (error) {
       console.error("Error sending message:", error);
-      setCurrentMessages(currentMessages);
-      setInputMessage(messageToSend);
       showNotification("Failed to send message", "error");
+      setIsAITyping(false);
     }
   };
 
@@ -676,50 +759,59 @@ export default function ChatPage() {
             </div>
             <div className="p-5 overflow-y-auto">
               <div className="grid grid-cols-1 gap-3">
-                {availableBots.map((bot) => {
-                  const isExisting = chatSessions.some(
-                    (session) =>
-                      session.contactName === bot.name && session.isAI === true,
-                  );
-                  return (
-                    <button
-                      key={bot.id}
-                      onClick={() => handleCreateBot(bot)}
-                      disabled={creatingBot}
-                      className="group p-4 border border-gray-200 rounded-xl hover:border-orange-500 hover:bg-orange-50/50 transition-all text-left disabled:opacity-50 flex items-center gap-4"
-                    >
-                      <div className="w-12 h-12 rounded-full bg-orange-100 flex items-center justify-center flex-shrink-0 group-hover:bg-orange-200 transition-colors">
-                        {creatingBot ? (
-                          <Loader2 className="w-6 h-6 text-orange-600 animate-spin" />
-                        ) : (
-                          <span className="text-orange-600 font-bold text-lg">
-                            {getInitials(bot.name)}
+                {loadingBots ? (
+                  <div className="flex justify-center p-4">
+                    <Loader2 className="w-6 h-6 text-orange-600 animate-spin" />
+                  </div>
+                ) : availableBots.length === 0 ? (
+                  <p className="text-gray-500 text-center">No bots available</p>
+                ) : (
+                  availableBots.map((bot) => {
+                    const isExisting = chatSessions.some(
+                      (session) =>
+                        session.contactName === bot.name &&
+                        session.isAI === true,
+                    );
+                    return (
+                      <button
+                        key={bot.id}
+                        onClick={() => handleCreateBot(bot)}
+                        disabled={creatingBot}
+                        className="group p-4 border border-gray-200 rounded-xl hover:border-orange-500 hover:bg-orange-50/50 transition-all text-left disabled:opacity-50 flex items-center gap-4"
+                      >
+                        <div className="w-12 h-12 rounded-full bg-orange-100 flex items-center justify-center flex-shrink-0 group-hover:bg-orange-200 transition-colors">
+                          {creatingBot ? (
+                            <Loader2 className="w-6 h-6 text-orange-600 animate-spin" />
+                          ) : (
+                            <span className="text-orange-600 font-bold text-lg">
+                              {getInitials(bot.name)}
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="flex-1 min-w-0 py-1">
+                          <h3 className="font-semibold text-gray-900">
+                            {bot.name}
+                          </h3>
+                          <p className="text-gray-500 text-sm truncate">
+                            {bot.description}
+                          </p>
+                        </div>
+
+                        {isExisting && (
+                          <span className="flex items-center gap-1 text-green-600 text-xs font-medium bg-green-50 px-2.5 py-1 rounded-full flex-shrink-0">
+                            <Check size={12} /> Added
                           </span>
                         )}
-                      </div>
 
-                      <div className="flex-1 min-w-0 py-1">
-                        <h3 className="font-semibold text-gray-900">
-                          {bot.name}
-                        </h3>
-                        <p className="text-gray-500 text-sm truncate">
-                          {bot.description}
-                        </p>
-                      </div>
-
-                      {isExisting && (
-                        <span className="flex items-center gap-1 text-green-600 text-xs font-medium bg-green-50 px-2.5 py-1 rounded-full flex-shrink-0">
-                          <Check size={12} /> Added
-                        </span>
-                      )}
-
-                      <ChevronRight
-                        className="text-gray-300 group-hover:text-orange-500 transition-colors flex-shrink-0"
-                        size={20}
-                      />
-                    </button>
-                  );
-                })}
+                        <ChevronRight
+                          className="text-gray-300 group-hover:text-orange-500 transition-colors flex-shrink-0"
+                          size={20}
+                        />
+                      </button>
+                    );
+                  })
+                )}
               </div>
             </div>
           </div>
@@ -786,11 +878,21 @@ export default function ChatPage() {
                 </div>
                 <div className="flex items-center gap-1.5">
                   <span
-                    className={`w-2 h-2 rounded-full ${activeContact?.isOnline ? "bg-green-500" : "bg-gray-300"}`}
+                    className={`w-2 h-2 rounded-full ${activeContact?.isOnline || activeContact?.isAI ? "bg-green-500" : "bg-gray-300"}`}
                   />
-                  <p className="text-xs text-gray-500">
-                    {activeContact?.isOnline ? "Online" : "Offline"}
-                  </p>
+                  {isAITyping ? (
+                    <p className="text-xs text-orange-500 font-medium animate-pulse">
+                      Typing...
+                    </p>
+                  ) : (
+                    <p className="text-xs text-gray-500">
+                      {activeContact?.isAI
+                        ? "Online"
+                        : activeContact?.isOnline
+                          ? "Online"
+                          : "Offline"}
+                    </p>
+                  )}
                 </div>
               </div>
             </div>
@@ -816,6 +918,42 @@ export default function ChatPage() {
                       Chat Options
                     </p>
                   </div>
+
+                  {/* Knowledge Base Manager*/}
+                  <button
+                    onClick={() => {
+                      setShowMenu(false);
+                      setShowKnowledgeModal(true);
+                    }}
+                    className="w-full px-4 py-3 text-left text-sm text-gray-700 hover:bg-orange-50 hover:text-orange-600 transition-colors flex items-center gap-3 group"
+                  >
+                    <div className="w-8 h-8 rounded-lg bg-gray-50 flex items-center justify-center group-hover:bg-orange-100">
+                      <Book
+                        size={18}
+                        className="text-gray-500 group-hover:text-orange-600"
+                      />
+                    </div>
+                    <span className="font-medium">Manage Knowledge Base</span>
+                  </button>
+
+                  {/* User Preferences Viewer*/}
+                  <button
+                    onClick={() => {
+                      setShowMenu(false);
+                      setShowPreferencesModal(true);
+                    }}
+                    className="w-full px-4 py-3 text-left text-sm text-gray-700 hover:bg-orange-50 hover:text-orange-600 transition-colors flex items-center gap-3 group"
+                  >
+                    <div className="w-8 h-8 rounded-lg bg-gray-50 flex items-center justify-center group-hover:bg-orange-100">
+                      <UserCog
+                        size={18}
+                        className="text-gray-500 group-hover:text-orange-600"
+                      />
+                    </div>
+                    <span className="font-medium">View My Preferences</span>
+                  </button>
+                  {/* Divider before existing options */}
+                  <div className="my-2 border-t border-gray-100"></div>
 
                   {/* Clear Chat Button*/}
                   <button
@@ -868,6 +1006,40 @@ export default function ChatPage() {
                     </div>
                     <span className="font-medium">Delete Session</span>
                   </button>
+                  {activeContact?.isAI && (
+                    <button
+                      onClick={async () => {
+                        setShowMenu(false);
+                        setModalConfig({ isOpen: true, type: "edit-prompt" });
+                        setNewSystemPrompt("Loading...");
+                        if (activeContact?.botId) {
+                          try {
+                            const res = await fetch(
+                              `/api/bots/${activeContact.botId}`,
+                            );
+                            if (res.ok) {
+                              const data = await res.json();
+                              setNewSystemPrompt(data.bot.systemPrompt || "");
+                            } else {
+                              setNewSystemPrompt("");
+                            }
+                          } catch (e) {
+                            console.error(e);
+                            setNewSystemPrompt("");
+                          }
+                        }
+                      }}
+                      className="w-full px-4 py-3 text-left text-sm text-gray-700 hover:bg-orange-50 hover:text-orange-600 transition-colors flex items-center gap-3 group"
+                    >
+                      <div className="w-8 h-8 rounded-lg bg-gray-50 flex items-center justify-center group-hover:bg-orange-100">
+                        <Edit
+                          size={16}
+                          className="text-gray-500 group-hover:text-orange-600"
+                        />
+                      </div>
+                      <span className="font-medium">Edit System Prompt</span>
+                    </button>
+                  )}
                 </div>
               )}
             </div>
@@ -926,7 +1098,59 @@ export default function ChatPage() {
                             }
                           `}
                           >
-                            <p>{message.content}</p>
+                            {isMe ? (
+                              <p>{message.content}</p>
+                            ) : (
+                              <ReactMarkdown
+                                remarkPlugins={[remarkGfm]}
+                                components={{
+                                  p: ({ node, ...props }) => (
+                                    <p className="mb-2 last:mb-0" {...props} />
+                                  ),
+                                  strong: ({ node, ...props }) => (
+                                    <strong className="font-bold" {...props} />
+                                  ),
+                                  em: ({ node, ...props }) => (
+                                    <em className="italic" {...props} />
+                                  ),
+                                  ul: ({ node, ...props }) => (
+                                    <ul
+                                      className="list-disc list-inside mb-2 space-y-1"
+                                      {...props}
+                                    />
+                                  ),
+                                  ol: ({ node, ...props }) => (
+                                    <ol
+                                      className="list-decimal list-inside mb-2 space-y-1"
+                                      {...props}
+                                    />
+                                  ),
+                                  li: ({ node, ...props }) => (
+                                    <li className="ml-2" {...props} />
+                                  ),
+                                  code: ({ node, inline, ...props }: any) =>
+                                    inline ? (
+                                      <code
+                                        className="bg-gray-200 text-gray-900 px-1.5 py-0.5 rounded text-sm font-mono"
+                                        {...props}
+                                      />
+                                    ) : (
+                                      <code
+                                        className="block bg-gray-200 text-gray-900 p-3 rounded-lg my-2 text-sm font-mono overflow-x-auto"
+                                        {...props}
+                                      />
+                                    ),
+                                  a: ({ node, ...props }) => (
+                                    <a
+                                      className="underline hover:text-orange-600"
+                                      {...props}
+                                    />
+                                  ),
+                                }}
+                              >
+                                {message.content}
+                              </ReactMarkdown>
+                            )}
                           </div>
                           <div
                             className={`flex items-center gap-1.5 mt-1.5 ${isMe ? "justify-end" : "justify-start"}`}
@@ -945,10 +1169,13 @@ export default function ChatPage() {
                                 {message.isRead ? (
                                   <CheckCheck
                                     size={14}
-                                    className="text-orange-500"
+                                    className="text-blue-500"
                                   />
                                 ) : message.isDelivered ? (
-                                  <CheckCheck size={14} />
+                                  <CheckCheck
+                                    size={14}
+                                    className="text-gray-400"
+                                  />
                                 ) : (
                                   <Check size={14} />
                                 )}
@@ -960,6 +1187,15 @@ export default function ChatPage() {
                     </div>
                   );
                 })}
+                {isAITyping && (
+                  <div className="flex justify-start animate-in fade-in slide-in-from-bottom-2 duration-300">
+                    <div className="bg-gray-100 rounded-2xl rounded-tl-none px-4 py-3 flex items-center gap-1">
+                      <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce [animation-delay:-0.3s]"></div>
+                      <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce [animation-delay:-0.15s]"></div>
+                      <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
+                    </div>
+                  </div>
+                )}
                 <div ref={messagesEndRef} />
               </>
             )}
@@ -1030,6 +1266,8 @@ export default function ChatPage() {
                   <Loader2 size={28} className="animate-spin" />
                 ) : modalConfig.type === "delete" ? (
                   <Trash2 size={28} />
+                ) : modalConfig.type === "edit-prompt" ? (
+                  <Edit size={28} />
                 ) : (
                   <MessageSquareOff size={28} />
                 )}
@@ -1038,16 +1276,31 @@ export default function ChatPage() {
               <h3 className="text-xl font-bold text-gray-900 mb-2">
                 {modalConfig.type === "delete"
                   ? "Delete Conversation?"
-                  : "Clear Chat History?"}
+                  : modalConfig.type === "edit-prompt"
+                    ? "Change Prompt"
+                    : "Clear Chat History?"}
               </h3>
 
               <p className="text-gray-500 text-sm leading-relaxed mb-8">
                 {isProcessing
-                  ? "Processing your request, please wait..."
-                  : modalConfig.type === "delete"
-                    ? `This will permanently delete your conversation with ${activeContact?.contactName}.`
-                    : "Are you sure you want to delete all messages? History will be gone."}
+                  ? "Processing..."
+                  : modalConfig.type === "edit-prompt"
+                    ? `Update the behavior for ${activeContact?.contactName}`
+                    : modalConfig.type === "delete"
+                      ? `This will permanently delete your conversation with ${activeContact?.contactName}.`
+                      : "Are you sure you want to delete all messages? History will be gone."}
               </p>
+
+              {modalConfig.type === "edit-prompt" && (
+                <div className="w-full mb-6">
+                  <textarea
+                    value={newSystemPrompt}
+                    onChange={(e) => setNewSystemPrompt(e.target.value)}
+                    placeholder="Enter new system prompt..."
+                    className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 min-h-[120px]"
+                  />
+                </div>
+              )}
 
               <div className="flex gap-3 w-full">
                 <button
@@ -1075,6 +1328,23 @@ export default function ChatPage() {
             </div>
           </div>
         </div>
+      )}
+      {/* Knowledge Manager Modal */}
+      {activeContact?.botId && (
+        <KnowledgeManager
+          open={showKnowledgeModal}
+          onClose={() => setShowKnowledgeModal(false)}
+          botId={activeContact.botId}
+          botName={activeContact.contactName}
+        />
+      )}
+      {/* Preferences Viewer Modal */}
+      {user && (
+        <PreferencesViewer
+          open={showPreferencesModal}
+          onClose={() => setShowPreferencesModal(false)}
+          userId={user.id} // Pass the Supabase user ID
+        />
       )}
     </div>
   );

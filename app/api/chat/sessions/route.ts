@@ -21,6 +21,7 @@ export async function GET(request: NextRequest) {
         contactName: true,
         contactAvatar: true,
         isAI: true,
+        botId: true,
         isOnline: true,
         updatedAt: true,
         _count: {
@@ -35,7 +36,7 @@ export async function GET(request: NextRequest) {
         },
       },
       orderBy: { updatedAt: "desc" },
-      take: 50, 
+      take: 50,
     });
 
     return NextResponse.json({ sessions });
@@ -60,8 +61,21 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
     const body = await request.json();
-    const { contactName, contactAvatar, isAI } = body;
-    if (!contactName) {
+    const { contactName, contactAvatar, isAI, botId } = body;
+
+    let finalContactName = contactName;
+    let finalContactAvatar = contactAvatar;
+
+    // If botId provided, fetch bot details
+    if (botId) {
+      const bot = await prisma.bot.findUnique({ where: { id: botId } });
+      if (bot) {
+        finalContactName = finalContactName || bot.name;
+        finalContactAvatar = finalContactAvatar || bot.avatar;
+      }
+    }
+
+    if (!finalContactName) {
       return NextResponse.json(
         { error: "Contact name is required" },
         { status: 400 },
@@ -78,9 +92,10 @@ export async function POST(request: NextRequest) {
     const session = await prisma.chatSession.create({
       data: {
         userId: dbUser.id,
-        contactName,
-        contactAvatar: contactAvatar || null,
+        contactName: finalContactName,
+        contactAvatar: finalContactAvatar || null,
         isAI: isAI || false,
+        botId: botId || null,
       },
     });
     return NextResponse.json({ session }, { status: 201 });
