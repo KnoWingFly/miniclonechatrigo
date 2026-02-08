@@ -27,9 +27,16 @@ import {
   MessageSquarePlus,
   Trash2,
   Edit,
+  UserCog,
+  Book,
 } from "lucide-react";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+
+import { KnowledgeManager } from "@/components/knowledge-manager";
+import { PreferencesViewer } from "@/components/preferences-viewer";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 export default function ChatPage() {
   const supabase = createClient();
@@ -54,6 +61,10 @@ export default function ChatPage() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [isAITyping, setIsAITyping] = useState(false);
+
+  // RAG State
+  const [showKnowledgeModal, setShowKnowledgeModal] = useState(false);
+  const [showPreferencesModal, setShowPreferencesModal] = useState(false);
 
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -908,6 +919,42 @@ export default function ChatPage() {
                     </p>
                   </div>
 
+                  {/* Knowledge Base Manager*/}
+                  <button
+                    onClick={() => {
+                      setShowMenu(false);
+                      setShowKnowledgeModal(true);
+                    }}
+                    className="w-full px-4 py-3 text-left text-sm text-gray-700 hover:bg-orange-50 hover:text-orange-600 transition-colors flex items-center gap-3 group"
+                  >
+                    <div className="w-8 h-8 rounded-lg bg-gray-50 flex items-center justify-center group-hover:bg-orange-100">
+                      <Book
+                        size={18}
+                        className="text-gray-500 group-hover:text-orange-600"
+                      />
+                    </div>
+                    <span className="font-medium">Manage Knowledge Base</span>
+                  </button>
+
+                  {/* User Preferences Viewer*/}
+                  <button
+                    onClick={() => {
+                      setShowMenu(false);
+                      setShowPreferencesModal(true);
+                    }}
+                    className="w-full px-4 py-3 text-left text-sm text-gray-700 hover:bg-orange-50 hover:text-orange-600 transition-colors flex items-center gap-3 group"
+                  >
+                    <div className="w-8 h-8 rounded-lg bg-gray-50 flex items-center justify-center group-hover:bg-orange-100">
+                      <UserCog
+                        size={18}
+                        className="text-gray-500 group-hover:text-orange-600"
+                      />
+                    </div>
+                    <span className="font-medium">View My Preferences</span>
+                  </button>
+                  {/* Divider before existing options */}
+                  <div className="my-2 border-t border-gray-100"></div>
+
                   {/* Clear Chat Button*/}
                   <button
                     disabled={currentMessages.length === 0}
@@ -1051,7 +1098,59 @@ export default function ChatPage() {
                             }
                           `}
                           >
-                            <p>{message.content}</p>
+                            {isMe ? (
+                              <p>{message.content}</p>
+                            ) : (
+                              <ReactMarkdown
+                                remarkPlugins={[remarkGfm]}
+                                components={{
+                                  p: ({ node, ...props }) => (
+                                    <p className="mb-2 last:mb-0" {...props} />
+                                  ),
+                                  strong: ({ node, ...props }) => (
+                                    <strong className="font-bold" {...props} />
+                                  ),
+                                  em: ({ node, ...props }) => (
+                                    <em className="italic" {...props} />
+                                  ),
+                                  ul: ({ node, ...props }) => (
+                                    <ul
+                                      className="list-disc list-inside mb-2 space-y-1"
+                                      {...props}
+                                    />
+                                  ),
+                                  ol: ({ node, ...props }) => (
+                                    <ol
+                                      className="list-decimal list-inside mb-2 space-y-1"
+                                      {...props}
+                                    />
+                                  ),
+                                  li: ({ node, ...props }) => (
+                                    <li className="ml-2" {...props} />
+                                  ),
+                                  code: ({ node, inline, ...props }: any) =>
+                                    inline ? (
+                                      <code
+                                        className="bg-gray-200 text-gray-900 px-1.5 py-0.5 rounded text-sm font-mono"
+                                        {...props}
+                                      />
+                                    ) : (
+                                      <code
+                                        className="block bg-gray-200 text-gray-900 p-3 rounded-lg my-2 text-sm font-mono overflow-x-auto"
+                                        {...props}
+                                      />
+                                    ),
+                                  a: ({ node, ...props }) => (
+                                    <a
+                                      className="underline hover:text-orange-600"
+                                      {...props}
+                                    />
+                                  ),
+                                }}
+                              >
+                                {message.content}
+                              </ReactMarkdown>
+                            )}
                           </div>
                           <div
                             className={`flex items-center gap-1.5 mt-1.5 ${isMe ? "justify-end" : "justify-start"}`}
@@ -1229,6 +1328,19 @@ export default function ChatPage() {
             </div>
           </div>
         </div>
+      )}
+      {/* Knowledge Manager Modal */}
+      <KnowledgeManager
+        open={showKnowledgeModal}
+        onClose={() => setShowKnowledgeModal(false)}
+      />
+      {/* Preferences Viewer Modal */}
+      {user && (
+        <PreferencesViewer
+          open={showPreferencesModal}
+          onClose={() => setShowPreferencesModal(false)}
+          userId={user.id} // Pass the Supabase user ID
+        />
       )}
     </div>
   );

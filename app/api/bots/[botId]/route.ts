@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { prisma } from "@/lib/db";
 
+// ========== PATCH (Update Bot) ==========
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ botId: string }> },
@@ -43,6 +44,7 @@ export async function PATCH(
   }
 }
 
+// ========== GET (Get Bot) ==========
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ botId: string }> },
