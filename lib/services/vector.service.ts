@@ -42,6 +42,7 @@ export interface UserPreferenceEntry {
 
 // Insert Knowledge
 export async function insertKnowledge(
+  botId: string,
   category: KnowledgeCategory,
   title: string,
   content: string,
@@ -51,11 +52,12 @@ export async function insertKnowledge(
     const embedding = await generateEmbedding(content);
     const result = await prisma.$executeRawUnsafe(
       `
-      INSERT INTO "KnowledgeBase" (id, category, title, content, embedding, metadata, "createdAt", "updatedAt")
-      VALUES ($1, $2, $3, $4, $5::vector, $6, NOW(), NOW())
+      INSERT INTO "KnowledgeBase" (id, "botId", category, title, content, embedding, metadata, "createdAt", "updatedAt")
+      VALUES ($1, $2, $3, $4, $5, $6::vector, $7, NOW(), NOW())
       RETURNING *
       `,
       generateId(),
+      botId,
       category,
       title,
       content,
@@ -64,7 +66,7 @@ export async function insertKnowledge(
     );
 
     return (await prisma.knowledgeBase.findFirstOrThrow({
-      where: { title, category },
+      where: { title, category, botId },
     })) as any;
   } catch (error) {
     console.error("Error inserting knowledge:", error);
@@ -75,6 +77,7 @@ export async function insertKnowledge(
 // Update Knowledge
 export async function updateKnowledge(
   id: string,
+  botId: string,
   updates: {
     title?: string;
     content?: string;
@@ -82,33 +85,61 @@ export async function updateKnowledge(
   },
 ): Promise<KnowledgeEntry> {
   try {
+    const existing = await prisma.knowledgeBase.findUnique({
+      where: { id },
+    });
+
+    if (!existing) {
+      throw new Error("Knowledge entry not found");
+    }
+
+    // Verify ownership
+    if ((existing as any).botId !== botId) {
+      throw new Error("Unauthorized: Knowledge belongs to different bot");
+    }
+
+    // Generate new embedding if content is being updated
+    let embedding: number[] | undefined;
     if (updates.content) {
-      const embedding = await generateEmbedding(updates.content);
+      embedding = await generateEmbedding(updates.content);
+    }
+
+    // Build update data
+    const updateData: any = {
+      updatedAt: new Date(),
+    };
+
+    if (updates.title) updateData.title = updates.title;
+    if (updates.content) updateData.content = updates.content;
+    if (updates.metadata !== undefined) updateData.metadata = updates.metadata;
+
+    // Update using raw SQL if embedding changed, otherwise use Prisma
+    if (embedding) {
       await prisma.$executeRawUnsafe(
         `
         UPDATE "KnowledgeBase"
-        SET title = COALESCE($2, title),
-            content = COALESCE($3, content),
-            embedding = COALESCE($4::vector, embedding),
-            metadata = COALESCE($5, metadata),
+        SET title = $2,
+            content = $3,
+            embedding = $4::vector,
+            metadata = $5,
             "updatedAt" = NOW()
         WHERE id = $1
         `,
         id,
-        updates.title,
+        updates.title ?? existing.title,
         updates.content,
-        updates.content ? `[${embedding.join(",")}]` : null,
-        updates.metadata ? JSON.stringify(updates.metadata) : null,
+        `[${embedding.join(",")}]`,
+        updates.metadata !== undefined
+          ? JSON.stringify(updates.metadata)
+          : existing.metadata,
       );
     } else {
       await prisma.knowledgeBase.update({
         where: { id },
-        data: {
-          ...(updates.title && { title: updates.title }),
-          ...(updates.metadata && { metadata: updates.metadata }),
-        },
+        data: updateData,
       });
     }
+
     return (await prisma.knowledgeBase.findFirstOrThrow({
       where: { id },
     })) as any;
@@ -119,8 +150,20 @@ export async function updateKnowledge(
 }
 
 // Delete Knowledge
-export async function deleteKnowledge(id: string): Promise<void> {
+export async function deleteKnowledge(
+  id: string,
+  botId: string,
+): Promise<void> {
   try {
+    // Verify ownership before deleting
+    const existing = await prisma.knowledgeBase.findUnique({ where: { id } });
+    if (!existing) {
+      throw new Error("Knowledge entry not found");
+    }
+    if ((existing as any).botId !== botId) {
+      throw new Error("Unauthorized: Knowledge belongs to different bot");
+    }
+
     await prisma.knowledgeBase.delete({
       where: { id },
     });
@@ -133,17 +176,21 @@ export async function deleteKnowledge(id: string): Promise<void> {
 
 // Get Knowledge by category
 export async function getKnowledgeByCategory(
+  botId: string,
   category: KnowledgeCategory,
 ): Promise<KnowledgeEntry[]> {
   return (await prisma.knowledgeBase.findMany({
-    where: { category },
+    where: { botId, category },
     orderBy: { createdAt: "desc" },
   })) as any;
 }
 
-// Get all knowledge
-export async function getAllKnowledge(): Promise<KnowledgeEntry[]> {
+// Get all knowledge for a bot
+export async function getAllKnowledge(
+  botId: string,
+): Promise<KnowledgeEntry[]> {
   return (await prisma.knowledgeBase.findMany({
+    where: { botId },
     orderBy: { createdAt: "desc" },
   })) as any;
 }
@@ -152,6 +199,7 @@ export async function getAllKnowledge(): Promise<KnowledgeEntry[]> {
 // WELCOME TO THE HELL
 
 export async function searchSimilarKnowledge(
+  botId: string,
   query: string,
   category?: KnowledgeCategory,
   topK: number = 5,
@@ -171,12 +219,14 @@ export async function searchSimilarKnowledge(
         1 - (embedding <=> $1::vector) as similarity
       FROM "KnowledgeBase"
       WHERE embedding IS NOT NULL
+      AND "botId" = $3
       ${categoryFilter}
       ORDER BY embedding <=> $1::vector
       LIMIT $2
       `,
       `[${queryEmbedding.join(",")}]`,
       topK,
+      botId,
     );
 
     const formatted = results.map((r) => ({
@@ -285,7 +335,6 @@ export async function deleteUserPreference(id: string): Promise<void> {
 function generateId(): string {
   return `c${Date.now().toString(36)}${Math.random().toString(36).substring(2, 15)}`;
 }
-
 
 // Test (AI Generated)
 // export async function testVectorSearch(): Promise<void> {

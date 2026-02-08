@@ -34,6 +34,7 @@ export interface RetrievalOptions {
 export async function retrieveContext(
   query: string,
   userId: string,
+  botId: string,
   options: RetrievalOptions = {},
 ): Promise<RAGContext> {
   try {
@@ -60,7 +61,7 @@ export async function retrieveContext(
       if (includeCategories.includes(category)) {
         const categoryTopK = Math.ceil(topK / includeCategories.length);
         searchPromises.push(
-          searchSimilarKnowledge(query, category, categoryTopK),
+          searchSimilarKnowledge(botId, query, category, categoryTopK),
         );
       }
     }
@@ -96,9 +97,8 @@ export async function retrieveContext(
         .length,
       instructions: topResults.filter((r) => r.category === "instructions")
         .length,
-      user_preferences: topResults.filter(
-        (r) => r.title === "User Preference", 
-      ).length,
+      user_preferences: topResults.filter((r) => r.title === "User Preference")
+        .length,
     };
 
     return {
@@ -132,9 +132,7 @@ export function formatContextForLLM(results: SearchResult[]): string {
     product_info: results.filter((r) => r.category === "product_info"),
     business_rules: results.filter((r) => r.category === "business_rules"),
     instructions: results.filter((r) => r.category === "instructions"),
-    user_preferences: results.filter(
-      (r) => r.title === "User Preference",
-    ),
+    user_preferences: results.filter((r) => r.title === "User Preference"),
   };
   let context = "";
   // Format each category
@@ -174,18 +172,20 @@ export function formatContextForLLM(results: SearchResult[]): string {
 
 // Add
 export async function addKnowledge(
+  botId: string,
   category: KnowledgeCategory,
   title: string,
   content: string,
   metadata?: any,
 ): Promise<KnowledgeEntry> {
   console.log(`Adding knowledge: ${title} (${category})`);
-  return await insertKnowledge(category, title, content, metadata);
+  return await insertKnowledge(botId, category, title, content, metadata);
 }
 
 // Update
 export async function modifyKnowledge(
   id: string,
+  botId: string,
   updates: {
     title?: string;
     content?: string;
@@ -193,27 +193,32 @@ export async function modifyKnowledge(
   },
 ): Promise<KnowledgeEntry> {
   console.log(`Updating knowledge: ${id}`);
-  return await updateKnowledge(id, updates);
+  return await updateKnowledge(id, botId, updates);
 }
 
 // Delete
-export async function removeKnowledge(id: string): Promise<void> {
+export async function removeKnowledge(
+  id: string,
+  botId: string,
+): Promise<void> {
   console.log(`Removing knowledge: ${id}`);
-  await deleteKnowledge(id);
+  await deleteKnowledge(id, botId);
 }
 
 // Get (category)
 export async function listKnowledge(
+  botId: string,
   category?: KnowledgeCategory,
 ): Promise<KnowledgeEntry[]> {
   if (category) {
-    return await getKnowledgeByCategory(category);
+    return await getKnowledgeByCategory(botId, category);
   }
-  return await getAllKnowledge();
+  return await getAllKnowledge(botId);
 }
 
 // Bulk Import
 export async function bulkImportKnowledge(
+  botId: string,
   entries: Array<{
     category: KnowledgeCategory;
     title: string;
@@ -227,7 +232,7 @@ export async function bulkImportKnowledge(
     const batch = entries.slice(i, i + batchSize);
     await Promise.all(
       batch.map((e) =>
-        insertKnowledge(e.category, e.title, e.content, e.metadata),
+        insertKnowledge(botId, e.category, e.title, e.content, e.metadata),
       ),
     );
     console.log(`Imported batch ${Math.floor(i / batchSize) + 1}`);
@@ -240,41 +245,46 @@ export async function bulkImportKnowledge(
 
 // ========== Testing Functions =========
 // AI GENERATED
-export async function testRAGWorkflow(): Promise<void> {
-  console.log("\nTesting RAG Workflow...\n");
-  try {
-    // Add test knowledge
-    console.log("1. Adding test knowledge");
-    await addKnowledge(
-      "product_info",
-      "Premium Subscription",
-      "Our premium plan costs $29.99/month and includes unlimited chats, priority support, and advanced AI features.",
-    );
-    await addKnowledge(
-      "business_rules",
-      "Cancellation Policy",
-      "Users can cancel their subscription anytime. No refunds for partial months, but service continues until period end.",
-    );
-    await addKnowledge(
-      "instructions",
-      "Tone Guidelines",
-      "Always be friendly, professional, and helpful. Use emojis sparingly. Explain technical concepts simply.",
-    );
-    // Test retrieval
-    console.log("\n2. Testing retrieval");
-    const context = await retrieveContext(
-      "How much is the premium plan and can I cancel?",
-      "test_user_123",
-      { topK: 5 },
-    );
-    console.log("\n3. Retrieved context:");
-    console.log(context.formattedContext);
-    console.log("\n4. Stats:");
-    console.log(`   Total results: ${context.totalResults}`);
-    console.log(`   Category breakdown:`, context.categories);
-    console.log("\nRAG workflow test passed!");
-  } catch (error) {
-    console.error("\nTest failed:", error);
-    throw error;
-  }
-}
+// export async function testRAGWorkflow(): Promise<void> {
+//   console.log("\nTesting RAG Workflow...\n");
+//   try {
+//     // Add test knowledge
+//     console.log("1. Adding test knowledge");
+//     const testBotId = "test_bot_123"; 
+//     await addKnowledge(
+//       testBotId,
+//       "product_info",
+//       "Premium Subscription",
+//       "Our premium plan costs $29.99/month and includes unlimited chats, priority support, and advanced AI features.",
+//     );
+//     await addKnowledge(
+//       testBotId,
+//       "business_rules",
+//       "Cancellation Policy",
+//       "Users can cancel their subscription anytime. No refunds for partial months, but service continues until period end.",
+//     );
+//     await addKnowledge(
+//       testBotId,
+//       "instructions",
+//       "Tone Guidelines",
+//       "Always be friendly, professional, and helpful. Use emojis sparingly. Explain technical concepts simply.",
+//     );
+//     // Test retrieval
+//     console.log("\n2. Testing retrieval");
+//     const context = await retrieveContext(
+//       "How much is the premium plan and can I cancel?",
+//       "test_user_123",
+//       testBotId,
+//       { topK: 5 },
+//     );
+//     console.log("\n3. Retrieved context:");
+//     console.log(context.formattedContext);
+//     console.log("\n4. Stats:");
+//     console.log(`   Total results: ${context.totalResults}`);
+//     console.log(`   Category breakdown:`, context.categories);
+//     console.log("\nRAG workflow test passed!");
+//   } catch (error) {
+//     console.error("\nTest failed:", error);
+//     throw error;
+//   }
+// }

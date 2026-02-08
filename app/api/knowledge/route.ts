@@ -12,6 +12,14 @@ export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams;
     const category = searchParams.get("category") as KnowledgeCategory | null;
+    const botId = searchParams.get("botId");
+
+    if (!botId) {
+      return NextResponse.json(
+        { error: "Bot ID is required" },
+        { status: 400 },
+      );
+    }
 
     if (
       category &&
@@ -25,7 +33,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const knowledge = await listKnowledge(category || undefined);
+    const knowledge = await listKnowledge(botId, category || undefined);
 
     return NextResponse.json({
       success: true,
@@ -52,15 +60,16 @@ export async function POST(request: NextRequest) {
     );
 
     // Validate required fields
-    const { category, title, content, metadata } = body;
-    if (!category || !title || !content) {
+    const { botId, category, title, content, metadata } = body;
+    if (!botId || !category || !title || !content) {
       console.log("Validation failed - missing fields:", {
+        botId: !!botId,
         category: !!category,
         title: !!title,
         content: !!content,
       });
       return NextResponse.json(
-        { error: "Missing required fields: category, title, content" },
+        { error: "Missing required fields: botId, category, title, content" },
         { status: 400 },
       );
     }
@@ -99,6 +108,7 @@ export async function POST(request: NextRequest) {
 
     // Add to knowledge base (auto generate embedding)
     const entry = await addKnowledge(
+      botId,
       category as KnowledgeCategory,
       title,
       content,
@@ -127,10 +137,10 @@ export async function PUT(request: NextRequest) {
     const body = await request.json();
 
     // Validate required fields
-    const { id, title, content, metadata } = body;
-    if (!id) {
+    const { id, botId, title, content, metadata } = body;
+    if (!id || !botId) {
       return NextResponse.json(
-        { error: "Missing required field: id" },
+        { error: "Missing required fields: id, botId" },
         { status: 400 },
       );
     }
@@ -153,7 +163,7 @@ export async function PUT(request: NextRequest) {
     if (metadata) updates.metadata = metadata;
 
     // Update knowledge
-    const entry = await modifyKnowledge(id, updates);
+    const entry = await modifyKnowledge(id, botId, updates);
     return NextResponse.json({
       success: true,
       data: entry,
@@ -179,18 +189,20 @@ export async function PUT(request: NextRequest) {
 // ================== DELETE (Remove knowledge)==================
 export async function DELETE(request: NextRequest) {
   try {
-    // Get ID from query params
+    // Get ID and botId from query params
     const searchParams = request.nextUrl.searchParams;
     const id = searchParams.get("id");
-    if (!id) {
+    const botId = searchParams.get("botId");
+
+    if (!id || !botId) {
       return NextResponse.json(
-        { error: "Missing required parameter: id" },
+        { error: "Missing required parameters: id and botId" },
         { status: 400 },
       );
     }
 
     // Delete the entry
-    await removeKnowledge(id);
+    await removeKnowledge(id, botId);
     return NextResponse.json({
       success: true,
       message: "Knowledge entry deleted successfully",

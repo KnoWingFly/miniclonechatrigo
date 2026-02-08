@@ -8,14 +8,14 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 
-import {Book} from "lucide-react";
+import { Book } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { Trash2, Edit2, Plus, Loader2 } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
-import { toast } from "sonner"; 
+import { toast } from "sonner";
 
 // ================== Types ==================
 type KnowledgeCategory = "product_info" | "business_rules" | "instructions";
@@ -31,10 +31,12 @@ interface KnowledgeEntry {
 interface Props {
   open: boolean;
   onClose: () => void;
+  botId: string;
+  botName: string;
 }
 
 // ================== Main Component  ==================
-export function KnowledgeManager({ open, onClose }: Props) {
+export function KnowledgeManager({ open, onClose, botId, botName }: Props) {
   const [activeCategory, setActiveCategory] =
     useState<KnowledgeCategory>("product_info");
   const [knowledge, setKnowledge] = useState<KnowledgeEntry[]>([]);
@@ -53,7 +55,9 @@ export function KnowledgeManager({ open, onClose }: Props) {
   async function fetchKnowledge() {
     try {
       setLoading(true);
-      const response = await fetch(`/api/knowledge?category=${activeCategory}`);
+      const response = await fetch(
+        `/api/knowledge?botId=${botId}&category=${activeCategory}`,
+      );
       const data = await response.json();
       if (data.success) {
         setKnowledge(data.data);
@@ -84,6 +88,7 @@ export function KnowledgeManager({ open, onClose }: Props) {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             id: editingId,
+            botId,
             title: formData.title,
             content: formData.content,
           }),
@@ -98,11 +103,12 @@ export function KnowledgeManager({ open, onClose }: Props) {
           toast.error(data.error || "Failed to update");
         }
       } else {
-        // Create new entry 
+        // Create new entry
         const response = await fetch("/api/knowledge", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
+            botId,
             category: activeCategory,
             title: formData.title,
             content: formData.content,
@@ -131,7 +137,7 @@ export function KnowledgeManager({ open, onClose }: Props) {
     }
     try {
       setLoading(true);
-      const response = await fetch(`/api/knowledge?id=${id}`, {
+      const response = await fetch(`/api/knowledge?id=${id}&botId=${botId}`, {
         method: "DELETE",
       });
       const data = await response.json();

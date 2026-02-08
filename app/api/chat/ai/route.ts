@@ -83,10 +83,15 @@ export async function POST(request: NextRequest) {
     const userMessage = latestMessage.content;
 
     // RAG Implementation
-    const ragContext = await retrieveContext(userMessage, dbUser.id, {
-      topK: 7, // Choose top 7 most relevant results
-      minSimilarity: 0.3, // ONLY include results with > 30% similarity
-    });
+    const ragContext = await retrieveContext(
+      userMessage,
+      dbUser.id,
+      session.botId,
+      {
+        topK: 7, // Choose top 7 most relevant results
+        minSimilarity: 0.3, // ONLY include results with > 30% similarity
+      },
+    );
 
     console.log(`   - Product Info: ${ragContext.categories.product_info}`);
     console.log(`   - Business Rules: ${ragContext.categories.business_rules}`);

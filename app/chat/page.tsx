@@ -1330,10 +1330,14 @@ export default function ChatPage() {
         </div>
       )}
       {/* Knowledge Manager Modal */}
-      <KnowledgeManager
-        open={showKnowledgeModal}
-        onClose={() => setShowKnowledgeModal(false)}
-      />
+      {activeContact?.botId && (
+        <KnowledgeManager
+          open={showKnowledgeModal}
+          onClose={() => setShowKnowledgeModal(false)}
+          botId={activeContact.botId}
+          botName={activeContact.contactName}
+        />
+      )}
       {/* Preferences Viewer Modal */}
       {user && (
         <PreferencesViewer
